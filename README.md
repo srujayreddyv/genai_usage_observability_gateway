@@ -88,6 +88,28 @@ but are not mislabeled as organization-level distinct counts.
 No token, cost, prompt, response, productivity, or production-code values are
 created or inferred by normalization or aggregation.
 
+## Privacy boundary
+
+Raw email addresses and provider user identifiers stop at the ingestion and
+normalization boundary. Before preview or future telemetry processing, each
+provider user identifier is namespaced by provider and pseudonymized with
+[HMAC-SHA256](https://www.rfc-editor.org/rfc/rfc2104) using
+`PSEUDONYMIZATION_KEY`. Only the first sixteen lowercase hexadecimal characters
+are retained. The secret is represented as a Pydantic `SecretStr` and is never
+included in exported models or errors.
+
+The resulting privacy-safe collection has three explicit downstream sources:
+identity-free collection metadata for tracing, identity-free organization
+summaries for metrics, and pseudonymous user records for usage events and
+previews. The in-memory JSON preview contains pseudonyms but no emails, raw
+provider identifiers, organizational groups, or secret values.
+
+Automated privacy contract tests cover the serialized sources intended for
+future telemetry logs, metric attributes, trace attributes, and preview output.
+Actual OpenTelemetry providers and exporters are not implemented yet; their
+integration tests will additionally enforce these contracts in later
+milestones.
+
 ## Development setup
 
 Prerequisites:

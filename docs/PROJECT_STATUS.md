@@ -2,12 +2,13 @@
 
 ## Current state
 
-Milestones 1 through 5 are complete. The project now has a validated Python
+Milestones 1 through 6 are complete. The project now has a validated Python
 foundation, cached application configuration, strict common usage models, an
 asynchronous provider protocol, a synthetic mock analytics client, and a strict
 Anthropic Claude Enterprise User Activity API client. Anthropic records can now
-be normalized and aggregated into identity-free organization summaries. No API
-service, privacy processing, or telemetry export has been implemented yet.
+be normalized, pseudonymized, aggregated into identity-free organization
+summaries, and rendered as privacy-safe in-memory previews. No API service or
+telemetry export has been implemented yet.
 
 ## Completed
 
@@ -60,6 +61,19 @@ service, privacy processing, or telemetry export has been implemented yet.
   unavailable-common-metric rejection
 - Tool-action acceptance rates constrained to zero through one, including zero
   when no tool actions occurred
+- Provider-namespaced HMAC-SHA256 pseudonymization using
+  `PSEUDONYMIZATION_KEY`
+- Stable pseudonyms limited to the required first sixteen lowercase hexadecimal
+  characters
+- Secret-redacted pseudonymizer construction and validation errors
+- Explicit privacy-safe Anthropic extension that rejects identity and group
+  fields
+- Pseudonymous user records containing no email or raw provider identifier
+- Identity-free organization summary and collection metadata sources
+- Cross-record validation for dates, providers, counts, and pseudonym uniqueness
+- Deterministic in-memory JSON preview containing only privacy-safe data
+- Automated proofs that raw identities and group data are absent from serialized
+  log, metric-attribute, trace-attribute, and preview sources
 
 ## Validation
 
@@ -69,8 +83,8 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Ruff formatting check passed
 - Ruff lint check passed
 - mypy strict type checking passed
-- pytest passed: 109 tests
-- Source coverage: 100% (488 statements)
+- pytest passed: 132 tests
+- Source coverage: 100% (577 statements)
 - Installed-package import validation passed and reported version `0.1.0`
 
 ## Known limitations
@@ -78,9 +92,13 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - The Anthropic client currently uses the single-day, ungrouped User Activity
   query needed by the gateway; newer range, filtering, grouping, and ordering
   API options are intentionally outside this milestone.
-- Normalized records still contain raw identity at the ingestion and
-  normalization boundary. Pseudonymization and preview privacy controls are not
-  implemented yet.
+- Normalized records intentionally retain raw identity only until the privacy
+  boundary; downstream code must consume privacy-safe collection models.
+- Preview rendering is currently in-memory only. No API endpoint or local file
+  workflow exposes it yet.
+- OpenTelemetry providers and exporters are not implemented. Privacy tests
+  currently prove the safety of their designated source models; later telemetry
+  milestones must also test actual emitted attributes and log records.
 - Only the Anthropic provider has a normalization and aggregation adapter; the
   synthetic mock provider remains an ingestion fixture for local development.
 - The Anthropic integration has been tested only with synthetic mocked HTTP
@@ -90,6 +108,6 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 
 ## Next recommended milestone
 
-Milestone 6: implement HMAC-SHA256 pseudonymization, keep only the first sixteen
-hexadecimal characters, ensure raw identity never reaches telemetry or preview
-output, and add automated privacy proofs for every export boundary.
+Milestone 7: implement idempotent OpenTelemetry initialization with a shared
+resource, local console telemetry, configurable OTLP HTTP export, force flush,
+and clean shutdown during the FastAPI lifespan.
