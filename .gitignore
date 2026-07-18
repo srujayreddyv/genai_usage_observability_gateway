@@ -1,0 +1,22 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.python-version
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Local telemetry and generated development artifacts
+*.log
+preview*.json
+telemetry-output/
