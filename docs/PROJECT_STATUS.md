@@ -2,12 +2,12 @@
 
 ## Current state
 
-Milestones 1 through 4 are complete. The project now has a validated Python
+Milestones 1 through 5 are complete. The project now has a validated Python
 foundation, cached application configuration, strict common usage models, an
 asynchronous provider protocol, a synthetic mock analytics client, and a strict
-Anthropic Claude Enterprise User Activity API client. No normalization
-workflow, API service, privacy processing, or telemetry export has been
-implemented yet.
+Anthropic Claude Enterprise User Activity API client. Anthropic records can now
+be normalized and aggregated into identity-free organization summaries. No API
+service, privacy processing, or telemetry export has been implemented yet.
 
 ## Completed
 
@@ -47,6 +47,19 @@ implemented yet.
 - Secret-safe authentication, authorization, rate-limit, unavailable-date,
   transport, malformed-response, and server-failure errors
 - Fully mocked HTTP tests covering request construction and multiple pages
+- Anthropic-to-common normalization for identity, chat messages, Claude Code
+  sessions, tool actions, and the documented daily active-user definition
+- Strict Anthropic usage extension preserving all supported product categories
+- Explicit omission of grouping metadata from the normalized provider extension
+- No invented token, cost, prompt, response, or productivity fields
+- Generic organization-summary extension boundary for future provider totals
+- Additive Anthropic totals for Claude Code, Cowork, Design, Office, Science,
+  and web-search activity
+- Organization summaries containing no individual identity or group fields
+- Empty-input, mixed-date, duplicate-user, incompatible-provider, and
+  unavailable-common-metric rejection
+- Tool-action acceptance rates constrained to zero through one, including zero
+  when no tool actions occurred
 
 ## Validation
 
@@ -56,16 +69,20 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Ruff formatting check passed
 - Ruff lint check passed
 - mypy strict type checking passed
-- pytest passed: 83 tests
-- Source coverage: 100% (354 statements)
+- pytest passed: 109 tests
+- Source coverage: 100% (488 statements)
 - Installed-package import validation passed and reported version `0.1.0`
 
 ## Known limitations
 
-- Provider response records are not normalized into the common domain model yet.
 - The Anthropic client currently uses the single-day, ungrouped User Activity
   query needed by the gateway; newer range, filtering, grouping, and ordering
   API options are intentionally outside this milestone.
+- Normalized records still contain raw identity at the ingestion and
+  normalization boundary. Pseudonymization and preview privacy controls are not
+  implemented yet.
+- Only the Anthropic provider has a normalization and aggregation adapter; the
+  synthetic mock provider remains an ingestion fixture for local development.
 - The Anthropic integration has been tested only with synthetic mocked HTTP
   responses. No real Analytics API credential or provider connection has been
   tested.
@@ -73,6 +90,6 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 
 ## Next recommended milestone
 
-Milestone 5: map Anthropic provider records into honest common normalized usage
-records, preserve provider-specific capabilities in an Anthropic extension,
-and implement validated organization aggregation calculations.
+Milestone 6: implement HMAC-SHA256 pseudonymization, keep only the first sixteen
+hexadecimal characters, ensure raw identity never reaches telemetry or preview
+output, and add automated privacy proofs for every export boundary.

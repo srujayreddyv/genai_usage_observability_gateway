@@ -25,107 +25,16 @@ from genai_usage_observability_gateway.providers.errors import (
     ProviderServerError,
     ProviderTransportError,
 )
+from tests.factories import (
+    anthropic_activity_payload as _activity,
+)
+from tests.factories import (
+    anthropic_page_payload as _page,
+)
 
 REPORTING_DATE = date(2026, 2, 3)
 SYNTHETIC_API_KEY = "synthetic-analytics-key"
 Handler = Callable[[httpx.Request], httpx.Response]
-
-
-def _tool_action_counts() -> dict[str, int]:
-    return {"accepted_count": 2, "rejected_count": 1}
-
-
-def _office_product_metrics() -> dict[str, int]:
-    return {
-        "connectors_used_count": 2,
-        "distinct_connectors_used_count": 1,
-        "distinct_session_count": 3,
-        "distinct_skills_used_count": 1,
-        "message_count": 5,
-        "skills_used_count": 2,
-    }
-
-
-def _activity(user_number: int = 1) -> dict[str, object]:
-    return {
-        "chat_metrics": {
-            "connectors_used_count": 2,
-            "distinct_artifacts_created_count": 1,
-            "distinct_connectors_used_count": 1,
-            "distinct_conversation_count": 3,
-            "distinct_files_uploaded_count": 1,
-            "distinct_projects_created_count": 1,
-            "distinct_projects_used_count": 2,
-            "distinct_shared_artifacts_viewed_count": 1,
-            "distinct_skills_used_count": 1,
-            "message_count": 8,
-            "shared_conversations_viewed_count": 1,
-            "thinking_message_count": 2,
-        },
-        "claude_code_metrics": {
-            "core_metrics": {
-                "commit_count": 2,
-                "distinct_session_count": 3,
-                "lines_of_code": {"added_count": 20, "removed_count": 4},
-                "pull_request_count": 1,
-            },
-            "tool_actions": {
-                "edit_tool": _tool_action_counts(),
-                "multi_edit_tool": _tool_action_counts(),
-                "notebook_edit_tool": _tool_action_counts(),
-                "write_tool": _tool_action_counts(),
-            },
-        },
-        "cowork_metrics": {
-            "action_count": 4,
-            "connectors_used_count": 2,
-            "dispatch_turn_count": 1,
-            "distinct_connectors_used_count": 1,
-            "distinct_session_count": 3,
-            "distinct_skills_used_count": 2,
-            "message_count": 6,
-            "skills_used_count": 3,
-            "distinct_plugins_used_count": 1,
-            "edit_tool_count": 1,
-            "file_edit_count": 1,
-            "multi_edit_tool_count": 0,
-            "notebook_edit_tool_count": 0,
-            "plugins_used_count": 2,
-            "sessions_with_file_edits_count": 1,
-            "write_tool_count": 1,
-        },
-        "design_metrics": {
-            "distinct_projects_created_count": 1,
-            "distinct_projects_used_count": 2,
-            "distinct_session_count": 2,
-            "message_count": 4,
-        },
-        "office_metrics": {
-            "excel": _office_product_metrics(),
-            "outlook": _office_product_metrics(),
-            "powerpoint": _office_product_metrics(),
-            "word": _office_product_metrics(),
-        },
-        "science_metrics": {
-            "delegation_count": 1,
-            "distinct_session_count": 2,
-            "message_count": 3,
-            "remote_compute_job_count": 1,
-            "skills_used_count": 2,
-        },
-        "web_search_count": 2,
-        "last_activity_date": "2026-02-03",
-        "user": {
-            "id": f"synthetic-user-{user_number:03d}",
-            "email_address": f"fictional.user{user_number}@example.com",
-        },
-    }
-
-
-def _page(
-    activities: list[dict[str, object]], next_page: str | None = None
-) -> dict[str, object]:
-    return {"data": activities, "next_page": next_page}
 
 
 async def _invoke(

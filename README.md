@@ -68,6 +68,26 @@ The implementation is based only on Anthropic's public documentation. Its
 automated tests use synthetic responses and mocked HTTP; no real Analytics API
 credential or provider connection has been used or tested.
 
+## Normalization and aggregation
+
+The Anthropic adapter maps only genuinely portable concepts into the common
+record: provider identity, chat messages, Claude Code sessions, accepted and
+rejected edit-tool actions, and the provider's documented daily active-user
+definition. All other documented product activity remains typed in an
+Anthropic-specific extension instead of being forced into misleading generic
+fields.
+
+Organization aggregation rejects empty inputs, mixed reporting dates, duplicate
+provider users, incompatible providers, and unavailable required common
+metrics. It emits identity-free common totals plus additive Anthropic-specific
+activity totals for Claude Code, Cowork, Design, Office, Science, and web
+search. Distinct provider fields that cannot be honestly summed into an
+organization-wide distinct value remain available on the per-user extension
+but are not mislabeled as organization-level distinct counts.
+
+No token, cost, prompt, response, productivity, or production-code values are
+created or inferred by normalization or aggregation.
+
 ## Development setup
 
 Prerequisites:
