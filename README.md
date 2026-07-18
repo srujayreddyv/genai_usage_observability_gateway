@@ -105,9 +105,9 @@ previews. The in-memory JSON preview contains pseudonyms but no emails, raw
 provider identifiers, organizational groups, or secret values.
 
 Automated privacy contract tests cover the serialized sources intended for
-future telemetry logs, metric attributes, trace attributes, and preview output.
-Actual metric instruments, usage events, workflow spans, and lifecycle log
-records are intentionally deferred to later milestones.
+telemetry logs, metric attributes, trace attributes, and preview output. Usage
+events, workflow spans, and lifecycle log records are intentionally deferred to
+later milestones.
 
 ## OpenTelemetry foundation
 
@@ -127,6 +127,22 @@ non-development environments initialize providers without exporters.
 The shared resource uses the official `service.name`, `service.version`, and
 current `deployment.environment.name` semantic conventions. `telemetry.source`
 is a custom project attribute, not an official OpenTelemetry convention.
+
+## Organization metrics
+
+Each privacy-safe organization summary records 42 synchronous gauges: seven
+generic normalized adoption and usage concepts under the custom
+`genai.usage.organization` namespace, and 35 Anthropic-only product concepts
+under the custom `anthropic.usage.organization` namespace. Gauges preserve the
+latest absolute daily totals when a reporting date is collected more than once;
+they do not incorrectly accumulate a retry as new activity.
+
+Every datapoint has exactly four allowlisted dimensions: reporting date,
+deployment environment, telemetry source, and provider. Metric attributes never
+contain emails, raw or pseudonymous user identifiers, organizational groups,
+file paths, API endpoints, or credential data. The metric and attribute names
+owned by this project are custom telemetry and are not presented as official
+OpenTelemetry semantic conventions.
 
 ## Development setup
 

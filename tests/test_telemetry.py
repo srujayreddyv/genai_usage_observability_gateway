@@ -10,6 +10,7 @@ from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs.export import ConsoleLogRecordExporter
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import ConsoleMetricExporter
+from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 from pydantic import AnyHttpUrl, SecretStr
@@ -195,6 +196,23 @@ def test_runtime_flushes_and_shuts_down_each_provider_once() -> None:
     logger_mock.shutdown.assert_called_once_with()
 
 
+def test_runtime_requires_deployment_environment_resource_attribute() -> None:
+    with pytest.raises(ValueError, match="requires a deployment environment"):
+        TelemetryRuntime(
+            resource=Resource.create({}),
+            tracer_provider=cast(
+                TracerProvider, create_autospec(TracerProvider, instance=True)
+            ),
+            meter_provider=cast(
+                MeterProvider, create_autospec(MeterProvider, instance=True)
+            ),
+            logger_provider=cast(
+                LoggerProvider, create_autospec(LoggerProvider, instance=True)
+            ),
+            export_mode=TelemetryExportMode.NONE,
+        )
+
+
 def test_manager_initialization_is_idempotent_and_reference_counted() -> None:
     created: list[TelemetryRuntime] = []
 
@@ -212,6 +230,7 @@ def test_manager_initialization_is_idempotent_and_reference_counted() -> None:
     manager.shutdown()
 
     assert first is second
+    assert first.organization_metrics is second.organization_metrics
     assert created == [first]
     assert manager.active_runtime is first
     assert not first.is_shutdown

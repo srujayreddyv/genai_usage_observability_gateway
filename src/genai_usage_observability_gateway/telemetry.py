@@ -50,13 +50,17 @@ from genai_usage_observability_gateway.config import (
     AppSettings,
     DeploymentEnvironment,
 )
+from genai_usage_observability_gateway.organization_metrics import (
+    OrganizationMetricEmitter,
+)
+from genai_usage_observability_gateway.telemetry_attributes import (
+    TELEMETRY_SOURCE as TELEMETRY_SOURCE,
+)
+from genai_usage_observability_gateway.telemetry_attributes import (
+    TELEMETRY_SOURCE_VALUE as TELEMETRY_SOURCE_VALUE,
+)
 
 SERVICE_NAME_VALUE = "genai-usage-observability-gateway"
-
-# Custom project resource attribute. This is intentionally not represented as an
-# official OpenTelemetry semantic convention.
-TELEMETRY_SOURCE = "telemetry.source"
-TELEMETRY_SOURCE_VALUE = "provider_analytics_api"
 
 _HEADER_NAME_PATTERN = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 
@@ -122,8 +126,20 @@ class TelemetryRuntime:
     meter_provider: MeterProvider
     logger_provider: LoggerProvider
     export_mode: TelemetryExportMode
+    organization_metrics: OrganizationMetricEmitter = field(init=False)
     _shutdown: bool = field(default=False, init=False, repr=False)
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        """Create organization instruments once for this provider runtime."""
+
+        environment = self.resource.attributes.get(DEPLOYMENT_ENVIRONMENT_NAME)
+        if not isinstance(environment, str):
+            raise ValueError("telemetry resource requires a deployment environment")
+        self.organization_metrics = OrganizationMetricEmitter(
+            self.meter_provider,
+            DeploymentEnvironment(environment),
+        )
 
     @property
     def is_shutdown(self) -> bool:

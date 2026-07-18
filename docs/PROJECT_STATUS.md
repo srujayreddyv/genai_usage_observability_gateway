@@ -2,15 +2,17 @@
 
 ## Current state
 
-Milestones 1 through 7 are complete. The project now has a validated Python
+Milestones 1 through 8 are complete. The project now has a validated Python
 foundation, cached application configuration, strict common usage models, an
 asynchronous provider protocol, a synthetic mock analytics client, and a strict
 Anthropic Claude Enterprise User Activity API client. Anthropic records can now
 be normalized, pseudonymized, aggregated into identity-free organization
 summaries, and rendered as privacy-safe in-memory previews. An endpoint-free
 FastAPI shell now manages shared OpenTelemetry trace, metric, and log providers
-with console or configured OTLP/HTTP exporters. No application telemetry
-instruments or API endpoints have been implemented yet.
+with console or configured OTLP/HTTP exporters. Privacy-safe organization
+gauges cover generic normalized concepts and explicitly namespaced Anthropic
+concepts. No user events, workflow spans, lifecycle logs, or API endpoints have
+been implemented yet.
 
 ## Completed
 
@@ -92,6 +94,20 @@ instruments or API endpoints have been implemented yet.
   endpoint is configured
 - Lifecycle tests covering resource sharing, initialization, flush, shutdown,
   console, disabled, and mocked OTLP modes
+- Synchronous gauges for absolute daily totals so collection retries replace
+  rather than accumulate organization values
+- Seven custom `genai.usage.organization` gauges limited to genuinely normalized
+  common user, activity, session, tool-action, and acceptance concepts
+- Thirty-five custom `anthropic.usage.organization` gauges preserving Claude
+  Code, Cowork, Design, Office, Science, and web-search semantics
+- Explicit custom metric definitions with names, UCUM-compatible annotated
+  units, and descriptions
+- Exactly four allowlisted metric dimensions: reporting date, deployment
+  environment, telemetry source, and provider
+- No raw or pseudonymous identifiers, emails, groups, paths, endpoints, or
+  credential data in actual emitted metric attributes
+- In-memory OpenTelemetry SDK tests proving all 42 metric names, values, units,
+  last-value behavior, provider consistency, attribute allowlisting, and privacy
 
 ## Validation
 
@@ -101,8 +117,8 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Ruff formatting check passed
 - Ruff lint check passed
 - mypy strict type checking passed
-- pytest passed: 145 tests
-- Source coverage: 100% (725 statements)
+- pytest passed: 152 tests
+- Source coverage: 100% (783 statements)
 - Installed-package import validation passed and reported version `0.1.0`
 
 ## Known limitations
@@ -114,10 +130,9 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
   boundary; downstream code must consume privacy-safe collection models.
 - Preview rendering is currently in-memory only. No API endpoint or local file
   workflow exposes it yet.
-- OpenTelemetry providers and exporters are initialized, but organization metric
-  instruments, pseudonymous usage events, collection spans, and lifecycle log
-  records are not implemented. Later telemetry milestones must test actual
-  emitted values against the existing privacy contracts.
+- OpenTelemetry providers, exporters, and organization metric instruments are
+  initialized, but pseudonymous usage events, collection spans, and lifecycle
+  log records are not implemented.
 - Only the Anthropic provider has a normalization and aggregation adapter; the
   synthetic mock provider remains an ingestion fixture for local development.
 - The Anthropic integration has been tested only with synthetic mocked HTTP
@@ -127,6 +142,5 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 
 ## Next recommended milestone
 
-Milestone 8: emit privacy-safe, low-cardinality organization adoption and usage
-metrics while preserving the boundary between genuinely generic and
-provider-specific concepts.
+Milestone 9: emit exactly one privacy-safe structured usage event per normalized
+user record, with JSON local logging and OpenTelemetry log export.
