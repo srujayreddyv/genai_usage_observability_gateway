@@ -23,9 +23,23 @@ code was created.
 
 ## Project status
 
-The project is in its foundation stage and is not production-ready. See
+The project has foundational configuration and domain models and is not
+production-ready. See
 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for completed work, known
 limitations, and the next planned milestone.
+
+## Configuration
+
+Settings are loaded from environment variables and an optional local `.env`
+file using `pydantic-settings`. Mock mode is the local default. Selecting the
+Anthropic provider requires `ANTHROPIC_ADMIN_API_KEY`; staging and production
+also require `PSEUDONYMIZATION_KEY`. Secret values are redacted from model
+representations and validation errors.
+
+The normalized usage model contains only portable identity and observable
+activity concepts. Provider adapters retain unique capabilities in strict,
+typed provider-extension models. Optional activity counts distinguish a signal
+that was not exposed (`null`) from an exposed signal with no activity (`0`).
 
 ## Development setup
 
@@ -46,7 +60,7 @@ Run the foundation checks:
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy src tests
-uv run pytest
+uv run pytest --cov=genai_usage_observability_gateway
 uv run python -c "import genai_usage_observability_gateway"
 ```
 
