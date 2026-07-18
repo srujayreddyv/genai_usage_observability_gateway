@@ -2,13 +2,15 @@
 
 ## Current state
 
-Milestones 1 through 6 are complete. The project now has a validated Python
+Milestones 1 through 7 are complete. The project now has a validated Python
 foundation, cached application configuration, strict common usage models, an
 asynchronous provider protocol, a synthetic mock analytics client, and a strict
 Anthropic Claude Enterprise User Activity API client. Anthropic records can now
 be normalized, pseudonymized, aggregated into identity-free organization
-summaries, and rendered as privacy-safe in-memory previews. No API service or
-telemetry export has been implemented yet.
+summaries, and rendered as privacy-safe in-memory previews. An endpoint-free
+FastAPI shell now manages shared OpenTelemetry trace, metric, and log providers
+with console or configured OTLP/HTTP exporters. No application telemetry
+instruments or API endpoints have been implemented yet.
 
 ## Completed
 
@@ -74,6 +76,22 @@ telemetry export has been implemented yet.
 - Deterministic in-memory JSON preview containing only privacy-safe data
 - Automated proofs that raw identities and group data are absent from serialized
   log, metric-attribute, trace-attribute, and preview sources
+- FastAPI lifespan application shell with no routes or generated documentation
+  endpoints
+- One shared OpenTelemetry Resource for trace, metric, and log providers
+- Official `service.name`, `service.version`, and current
+  `deployment.environment.name` resource conventions
+- Explicitly documented custom `telemetry.source` resource attribute
+- Reference-counted, idempotent telemetry initialization across lifespan entries
+- Explicit force-flush and clean shutdown for logger, meter, and tracer providers
+- Development console export for logs, metrics, and traces
+- Configurable OTLP/HTTP export with derived standard per-signal paths
+- No built-in collector endpoint or implicit network destination
+- Optional percent-encoded OTLP headers with secret-safe validation errors
+- Provider initialization without exporters outside development when no OTLP
+  endpoint is configured
+- Lifecycle tests covering resource sharing, initialization, flush, shutdown,
+  console, disabled, and mocked OTLP modes
 
 ## Validation
 
@@ -83,8 +101,8 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Ruff formatting check passed
 - Ruff lint check passed
 - mypy strict type checking passed
-- pytest passed: 132 tests
-- Source coverage: 100% (577 statements)
+- pytest passed: 145 tests
+- Source coverage: 100% (725 statements)
 - Installed-package import validation passed and reported version `0.1.0`
 
 ## Known limitations
@@ -96,9 +114,10 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
   boundary; downstream code must consume privacy-safe collection models.
 - Preview rendering is currently in-memory only. No API endpoint or local file
   workflow exposes it yet.
-- OpenTelemetry providers and exporters are not implemented. Privacy tests
-  currently prove the safety of their designated source models; later telemetry
-  milestones must also test actual emitted attributes and log records.
+- OpenTelemetry providers and exporters are initialized, but organization metric
+  instruments, pseudonymous usage events, collection spans, and lifecycle log
+  records are not implemented. Later telemetry milestones must test actual
+  emitted values against the existing privacy contracts.
 - Only the Anthropic provider has a normalization and aggregation adapter; the
   synthetic mock provider remains an ingestion fixture for local development.
 - The Anthropic integration has been tested only with synthetic mocked HTTP
@@ -108,6 +127,6 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 
 ## Next recommended milestone
 
-Milestone 7: implement idempotent OpenTelemetry initialization with a shared
-resource, local console telemetry, configurable OTLP HTTP export, force flush,
-and clean shutdown during the FastAPI lifespan.
+Milestone 8: emit privacy-safe, low-cardinality organization adoption and usage
+metrics while preserving the boundary between genuinely generic and
+provider-specific concepts.

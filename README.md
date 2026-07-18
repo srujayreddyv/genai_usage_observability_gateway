@@ -23,8 +23,8 @@ code was created.
 
 ## Project status
 
-The project has foundational configuration and domain models and is not
-production-ready. See
+The project has ingestion, normalization, privacy, aggregation, and
+OpenTelemetry lifecycle foundations and is not production-ready. See
 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for completed work, known
 limitations, and the next planned milestone.
 
@@ -106,9 +106,27 @@ provider identifiers, organizational groups, or secret values.
 
 Automated privacy contract tests cover the serialized sources intended for
 future telemetry logs, metric attributes, trace attributes, and preview output.
-Actual OpenTelemetry providers and exporters are not implemented yet; their
-integration tests will additionally enforce these contracts in later
-milestones.
+Actual metric instruments, usage events, workflow spans, and lifecycle log
+records are intentionally deferred to later milestones.
+
+## OpenTelemetry foundation
+
+The endpoint-free FastAPI application shell initializes one shared trace,
+metric, and log provider set during its lifespan, then force-flushes and shuts
+the providers down after the final lifespan lease. Repeated initialization is
+idempotent and does not add duplicate exporters.
+
+Development uses console exporters when no OTLP endpoint is configured. Set
+`OTEL_EXPORTER_OTLP_ENDPOINT` to a collector's base HTTPS URL to use OTLP over
+HTTP; the standard `/v1/traces`, `/v1/metrics`, and `/v1/logs` paths are derived
+from that configured base. Optional `OTEL_EXPORTER_OTLP_HEADERS` values use
+comma-separated, percent-encoded `key=value` pairs and remain secret-redacted.
+No collector address is built into the application. Without an endpoint,
+non-development environments initialize providers without exporters.
+
+The shared resource uses the official `service.name`, `service.version`, and
+current `deployment.environment.name` semantic conventions. `telemetry.source`
+is a custom project attribute, not an official OpenTelemetry convention.
 
 ## Development setup
 
