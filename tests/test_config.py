@@ -30,7 +30,9 @@ def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "APP_ENVIRONMENT",
         "ANALYTICS_PROVIDER",
         "PSEUDONYMIZATION_KEY",
-        "ANTHROPIC_ADMIN_API_KEY",
+        "ANTHROPIC_ANALYTICS_API_KEY",
+        "ANTHROPIC_RESULT_LIMIT",
+        "ANTHROPIC_REQUEST_TIMEOUT_SECONDS",
         "OTEL_EXPORTER_OTLP_ENDPOINT",
         "OTEL_EXPORTER_OTLP_HEADERS",
     ):
@@ -79,25 +81,49 @@ def test_nonlocal_environment_requires_pseudonymization_key(
         load_settings_without_dotenv()
 
 
-def test_anthropic_provider_requires_admin_api_key(
+def test_anthropic_provider_requires_analytics_api_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("ANALYTICS_PROVIDER", "anthropic")
 
-    with pytest.raises(ValidationError, match="ANTHROPIC_ADMIN_API_KEY is required"):
+    with pytest.raises(
+        ValidationError, match="ANTHROPIC_ANALYTICS_API_KEY is required"
+    ):
         load_settings_without_dotenv()
 
 
-def test_anthropic_provider_accepts_admin_api_key(
+def test_anthropic_provider_accepts_analytics_configuration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("ANALYTICS_PROVIDER", "anthropic")
-    monkeypatch.setenv("ANTHROPIC_ADMIN_API_KEY", "synthetic-admin-key")
+    monkeypatch.setenv("ANTHROPIC_ANALYTICS_API_KEY", "synthetic-analytics-key")
+    monkeypatch.setenv("ANTHROPIC_RESULT_LIMIT", "250")
+    monkeypatch.setenv("ANTHROPIC_REQUEST_TIMEOUT_SECONDS", "12.5")
 
     settings = load_settings_without_dotenv()
 
     assert settings.analytics_provider is ProviderName.ANTHROPIC
-    assert settings.anthropic_admin_api_key is not None
+    assert settings.anthropic_analytics_api_key is not None
+    assert settings.anthropic_result_limit == 250
+    assert settings.anthropic_request_timeout_seconds == 12.5
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("ANTHROPIC_RESULT_LIMIT", "0"),
+        ("ANTHROPIC_RESULT_LIMIT", "1001"),
+        ("ANTHROPIC_REQUEST_TIMEOUT_SECONDS", "0"),
+        ("ANTHROPIC_REQUEST_TIMEOUT_SECONDS", "121"),
+    ],
+)
+def test_invalid_anthropic_request_settings_are_rejected(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError):
+        load_settings_without_dotenv()
 
 
 def test_empty_optional_environment_values_are_unset(

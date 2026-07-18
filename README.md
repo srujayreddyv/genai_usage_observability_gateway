@@ -32,9 +32,11 @@ limitations, and the next planned milestone.
 
 Settings are loaded from environment variables and an optional local `.env`
 file using `pydantic-settings`. Mock mode is the local default. Selecting the
-Anthropic provider requires `ANTHROPIC_ADMIN_API_KEY`; staging and production
-also require `PSEUDONYMIZATION_KEY`. Secret values are redacted from model
-representations and validation errors.
+Anthropic provider requires a Claude Enterprise Analytics API key in
+`ANTHROPIC_ANALYTICS_API_KEY`; staging and production also require
+`PSEUDONYMIZATION_KEY`. Secret values are redacted from model representations
+and validation errors. Analytics API keys and Admin API keys are different
+credential types and are not interchangeable.
 
 The normalized usage model contains only portable identity and observable
 activity concepts. Provider adapters retain unique capabilities in strict,
@@ -52,6 +54,19 @@ The mock provider-owned response schema exercises product categories exposed by
 Anthropic's public [User Activity API](https://platform.claude.com/docs/en/api/admin/analytics/users/list.md):
 chat, Claude Code, Cowork, Design, Office products, Science, and web search. It
 contains no prompts, responses, tokens, costs, or real identities.
+
+## Anthropic provider
+
+`AnthropicAnalyticsClient` retrieves all cursor pages from the Claude
+Enterprise User Activity API for one UTC date. It uses the documented
+`x-api-key` and `anthropic-version` headers, validates the complete public
+response shape, and converts provider failures to secret-safe application
+errors. The result limit and request timeout are configurable with
+`ANTHROPIC_RESULT_LIMIT` and `ANTHROPIC_REQUEST_TIMEOUT_SECONDS`.
+
+The implementation is based only on Anthropic's public documentation. Its
+automated tests use synthetic responses and mocked HTTP; no real Analytics API
+credential or provider connection has been used or tested.
 
 ## Development setup
 

@@ -4,7 +4,13 @@ from enum import StrEnum
 from functools import lru_cache
 from typing import Any
 
-from pydantic import AnyHttpUrl, SecretStr, field_validator, model_validator
+from pydantic import (
+    AnyHttpUrl,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,13 +44,15 @@ class AppSettings(BaseSettings):
     app_environment: DeploymentEnvironment = DeploymentEnvironment.DEVELOPMENT
     analytics_provider: ProviderName = ProviderName.MOCK
     pseudonymization_key: SecretStr | None = None
-    anthropic_admin_api_key: SecretStr | None = None
+    anthropic_analytics_api_key: SecretStr | None = None
+    anthropic_result_limit: int = Field(default=100, ge=1, le=1000)
+    anthropic_request_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
     otel_exporter_otlp_endpoint: AnyHttpUrl | None = None
     otel_exporter_otlp_headers: SecretStr | None = None
 
     @field_validator(
         "pseudonymization_key",
-        "anthropic_admin_api_key",
+        "anthropic_analytics_api_key",
         "otel_exporter_otlp_endpoint",
         "otel_exporter_otlp_headers",
         mode="before",
@@ -72,10 +80,10 @@ class AppSettings(BaseSettings):
 
         if (
             self.analytics_provider is ProviderName.ANTHROPIC
-            and self.anthropic_admin_api_key is None
+            and self.anthropic_analytics_api_key is None
         ):
             raise ValueError(
-                "ANTHROPIC_ADMIN_API_KEY is required for the Anthropic provider"
+                "ANTHROPIC_ANALYTICS_API_KEY is required for the Anthropic provider"
             )
 
         return self
