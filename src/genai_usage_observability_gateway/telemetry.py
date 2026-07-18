@@ -1,12 +1,9 @@
-"""OpenTelemetry provider lifecycle and exporter configuration.
-
-This module establishes providers only. Instruments and application telemetry are
-introduced in later milestones.
-"""
+"""OpenTelemetry provider lifecycle, exporters, and application emitters."""
 
 from __future__ import annotations
 
 import re
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -59,6 +56,7 @@ from genai_usage_observability_gateway.telemetry_attributes import (
 from genai_usage_observability_gateway.telemetry_attributes import (
     TELEMETRY_SOURCE_VALUE as TELEMETRY_SOURCE_VALUE,
 )
+from genai_usage_observability_gateway.usage_events import UsageEventEmitter
 
 SERVICE_NAME_VALUE = "genai-usage-observability-gateway"
 
@@ -127,6 +125,7 @@ class TelemetryRuntime:
     logger_provider: LoggerProvider
     export_mode: TelemetryExportMode
     organization_metrics: OrganizationMetricEmitter = field(init=False)
+    usage_events: UsageEventEmitter = field(init=False)
     _shutdown: bool = field(default=False, init=False, repr=False)
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
 
@@ -136,9 +135,18 @@ class TelemetryRuntime:
         environment = self.resource.attributes.get(DEPLOYMENT_ENVIRONMENT_NAME)
         if not isinstance(environment, str):
             raise ValueError("telemetry resource requires a deployment environment")
+        deployment_environment = DeploymentEnvironment(environment)
         self.organization_metrics = OrganizationMetricEmitter(
             self.meter_provider,
-            DeploymentEnvironment(environment),
+            deployment_environment,
+        )
+        self.usage_events = UsageEventEmitter(
+            self.logger_provider,
+            local_stream=(
+                sys.stdout
+                if deployment_environment is DeploymentEnvironment.DEVELOPMENT
+                else None
+            ),
         )
 
     @property

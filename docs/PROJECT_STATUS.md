@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 1 through 8 are complete. The project now has a validated Python
+Milestones 1 through 9 are complete. The project now has a validated Python
 foundation, cached application configuration, strict common usage models, an
 asynchronous provider protocol, a synthetic mock analytics client, and a strict
 Anthropic Claude Enterprise User Activity API client. Anthropic records can now
@@ -11,8 +11,9 @@ summaries, and rendered as privacy-safe in-memory previews. An endpoint-free
 FastAPI shell now manages shared OpenTelemetry trace, metric, and log providers
 with console or configured OTLP/HTTP exporters. Privacy-safe organization
 gauges cover generic normalized concepts and explicitly namespaced Anthropic
-concepts. No user events, workflow spans, lifecycle logs, or API endpoints have
-been implemented yet.
+concepts. Each protected user record now emits one structured
+`genai_user_usage` event to local JSON and the OpenTelemetry log pipeline. No
+workflow spans, lifecycle logs, or API endpoints have been implemented yet.
 
 ## Completed
 
@@ -108,6 +109,18 @@ been implemented yet.
   credential data in actual emitted metric attributes
 - In-memory OpenTelemetry SDK tests proving all 42 metric names, values, units,
   last-value behavior, provider consistency, attribute allowlisting, and privacy
+- Strict `genai_user_usage` body schema built only from post-privacy records
+- Exactly one structured usage event per protected user record in a collection
+- Reporting date, provider, pseudonymous identifier, normalized common activity,
+  and explicitly approved Anthropic activity in each event
+- One compact JSON line per event during local development
+- Direct OpenTelemetry Logs API emission with the required EventName and INFO
+  severity through the shared LoggerProvider
+- Identical structured bodies across local JSON and OpenTelemetry destinations
+- No raw identities, groups, secrets, credentials, authentication headers,
+  paths, or endpoints in actual emitted event bodies or attributes
+- In-memory log-export tests covering exact counts, complete safe fields,
+  EventName, severity, JSON parity, provider validation, and privacy
 
 ## Validation
 
@@ -117,8 +130,8 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Ruff formatting check passed
 - Ruff lint check passed
 - mypy strict type checking passed
-- pytest passed: 152 tests
-- Source coverage: 100% (783 statements)
+- pytest passed: 164 tests
+- Source coverage: 100% (836 statements)
 - Installed-package import validation passed and reported version `0.1.0`
 
 ## Known limitations
@@ -130,9 +143,9 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
   boundary; downstream code must consume privacy-safe collection models.
 - Preview rendering is currently in-memory only. No API endpoint or local file
   workflow exposes it yet.
-- OpenTelemetry providers, exporters, and organization metric instruments are
-  initialized, but pseudonymous usage events, collection spans, and lifecycle
-  log records are not implemented.
+- OpenTelemetry providers, exporters, organization metrics, and pseudonymous
+  usage events are implemented, but collection spans and lifecycle log records
+  are not.
 - Only the Anthropic provider has a normalization and aggregation adapter; the
   synthetic mock provider remains an ingestion fixture for local development.
 - The Anthropic integration has been tested only with synthetic mocked HTTP
@@ -142,5 +155,6 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 
 ## Next recommended milestone
 
-Milestone 9: emit exactly one privacy-safe structured usage event per normalized
-user record, with JSON local logging and OpenTelemetry log export.
+Milestone 10: trace each complete collection workflow with one
+`genai.usage.collection` span, safe operational attributes, explicit success and
+failure status, exception recording, and original-exception propagation.

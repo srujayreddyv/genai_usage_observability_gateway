@@ -231,6 +231,7 @@ def test_manager_initialization_is_idempotent_and_reference_counted() -> None:
 
     assert first is second
     assert first.organization_metrics is second.organization_metrics
+    assert first.usage_events is second.usage_events
     assert created == [first]
     assert manager.active_runtime is first
     assert not first.is_shutdown

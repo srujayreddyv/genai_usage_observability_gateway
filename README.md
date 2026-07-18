@@ -104,10 +104,9 @@ summaries for metrics, and pseudonymous user records for usage events and
 previews. The in-memory JSON preview contains pseudonyms but no emails, raw
 provider identifiers, organizational groups, or secret values.
 
-Automated privacy contract tests cover the serialized sources intended for
-telemetry logs, metric attributes, trace attributes, and preview output. Usage
-events, workflow spans, and lifecycle log records are intentionally deferred to
-later milestones.
+Automated privacy contract tests cover structured usage events, metric
+attributes, trace-attribute sources, and preview output. Workflow spans and
+lifecycle log records are intentionally deferred to later milestones.
 
 ## OpenTelemetry foundation
 
@@ -143,6 +142,19 @@ contain emails, raw or pseudonymous user identifiers, organizational groups,
 file paths, API endpoints, or credential data. The metric and attribute names
 owned by this project are custom telemetry and are not presented as official
 OpenTelemetry semantic conventions.
+
+## Structured usage events
+
+Every post-privacy user record produces exactly one `genai_user_usage` event.
+The body contains the reporting date, provider, pseudonymous identifier,
+normalized common activity, and the explicitly approved Anthropic activity
+extension. It never accepts emails, raw provider identifiers, organizational
+groups, credentials, authentication headers, file paths, or API endpoints.
+
+In development, each event is written as one compact JSON line. The same
+structured body is emitted through the shared OpenTelemetry LoggerProvider with
+`genai_user_usage` as the EventName, allowing configured OTLP/HTTP log export.
+These are two destinations for one logical event and use an identical payload.
 
 ## Development setup
 
