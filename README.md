@@ -41,6 +41,18 @@ activity concepts. Provider adapters retain unique capabilities in strict,
 typed provider-extension models. Optional activity counts distinguish a signal
 that was not exposed (`null`) from an exposed signal with no activity (`0`).
 
+## Mock provider
+
+`MockAnalyticsClient` implements the asynchronous provider protocol using only
+synthetic data. Each requested date returns exactly five fictional users with
+varied activity and group membership, including developer and non-developer
+patterns, accepted and rejected edit-tool actions, and an inactive user.
+
+The mock provider-owned response schema exercises product categories exposed by
+Anthropic's public [User Activity API](https://platform.claude.com/docs/en/api/admin/analytics/users/list.md):
+chat, Claude Code, Cowork, Design, Office products, Science, and web search. It
+contains no prompts, responses, tokens, costs, or real identities.
+
 ## Development setup
 
 Prerequisites:
