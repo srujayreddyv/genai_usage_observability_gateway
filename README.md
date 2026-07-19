@@ -105,8 +105,8 @@ previews. The in-memory JSON preview contains pseudonyms but no emails, raw
 provider identifiers, organizational groups, or secret values.
 
 Automated privacy contract tests cover structured usage events, metric
-attributes, trace-attribute sources, and preview output. Workflow spans and
-lifecycle log records are intentionally deferred to later milestones.
+attributes, workflow spans, and preview output. Lifecycle log records are
+intentionally deferred to a later milestone.
 
 ## OpenTelemetry foundation
 
@@ -155,6 +155,21 @@ In development, each event is written as one compact JSON line. The same
 structured body is emitted through the shared OpenTelemetry LoggerProvider with
 `genai_user_usage` as the EventName, allowing configured OTLP/HTTP log export.
 These are two destinations for one logical event and use an identical payload.
+
+## Collection workflow tracing
+
+`AnthropicCollectionWorkflow` runs provider retrieval and validation,
+normalization, privacy processing, aggregation, metric and event emission, and
+in-memory preview generation inside one `genai.usage.collection` span. Completed
+spans contain only the provider, bounded client type, reporting date, record
+count, and collection status.
+
+Successful spans retain the default unset OpenTelemetry status and record a
+`success` collection status. Failures record the exception once through the
+OpenTelemetry API, set the span status to error, mark the collection `failed`,
+and re-raise the original exception. Exception messages and stack traces are
+replaced with fixed privacy-safe event values so credentials, identities, or
+local source paths cannot enter trace data.
 
 ## Development setup
 

@@ -23,6 +23,14 @@ def build_anthropic_usage_preview(
     """Protect and aggregate records before constructing preview output."""
 
     collection = protect_anthropic_collection(records, pseudonymizer)
+    return build_anthropic_usage_preview_from_collection(collection)
+
+
+def build_anthropic_usage_preview_from_collection(
+    collection: AnthropicPrivacySafeCollection,
+) -> AnthropicUsagePreview:
+    """Construct a preview from an already protected and aggregated collection."""
+
     return AnthropicUsagePreview.model_validate(collection.model_dump())
 
 

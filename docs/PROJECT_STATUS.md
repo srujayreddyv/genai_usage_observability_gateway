@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 1 through 9 are complete. The project now has a validated Python
+Milestones 1 through 10 are complete. The project now has a validated Python
 foundation, cached application configuration, strict common usage models, an
 asynchronous provider protocol, a synthetic mock analytics client, and a strict
 Anthropic Claude Enterprise User Activity API client. Anthropic records can now
@@ -12,8 +12,10 @@ FastAPI shell now manages shared OpenTelemetry trace, metric, and log providers
 with console or configured OTLP/HTTP exporters. Privacy-safe organization
 gauges cover generic normalized concepts and explicitly namespaced Anthropic
 concepts. Each protected user record now emits one structured
-`genai_user_usage` event to local JSON and the OpenTelemetry log pipeline. No
-workflow spans, lifecycle logs, or API endpoints have been implemented yet.
+`genai_user_usage` event to local JSON and the OpenTelemetry log pipeline.
+Lifecycle logs and API endpoints remain unimplemented. One
+`genai.usage.collection` span now covers each complete in-memory Anthropic
+collection workflow.
 
 ## Completed
 
@@ -121,6 +123,22 @@ workflow spans, lifecycle logs, or API endpoints have been implemented yet.
   paths, or endpoints in actual emitted event bodies or attributes
 - In-memory log-export tests covering exact counts, complete safe fields,
   EventName, severity, JSON parity, provider validation, and privacy
+- In-memory Anthropic collection workflow spanning provider retrieval and
+  validation, normalization, privacy processing, aggregation, telemetry
+  emission, and preview generation
+- Exactly one `genai.usage.collection` span for each complete workflow
+- Bounded trace attributes for provider, client type, reporting date, record
+  count, and collection status only
+- Explicit `success` and `failed` collection status values with record counts on
+  successful spans
+- Usage-event trace correlation proving telemetry emission occurs inside the
+  collection span
+- Error status, one OpenTelemetry exception event, and same-instance exception
+  propagation on workflow failure
+- Privacy-safe fixed exception type, message, and stack-trace fields preventing
+  source paths or sensitive exception details from entering trace data
+- Successful and failed in-memory span-export tests covering output generation,
+  status, attributes, event count, trace privacy, and provider mismatch
 
 ## Validation
 
@@ -130,8 +148,8 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Ruff formatting check passed
 - Ruff lint check passed
 - mypy strict type checking passed
-- pytest passed: 164 tests
-- Source coverage: 100% (836 statements)
+- pytest passed: 168 tests
+- Source coverage: 100% (892 statements)
 - Installed-package import validation passed and reported version `0.1.0`
 
 ## Known limitations
@@ -143,9 +161,9 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
   boundary; downstream code must consume privacy-safe collection models.
 - Preview rendering is currently in-memory only. No API endpoint or local file
   workflow exposes it yet.
-- OpenTelemetry providers, exporters, organization metrics, and pseudonymous
-  usage events are implemented, but collection spans and lifecycle log records
-  are not.
+- OpenTelemetry providers, exporters, organization metrics, pseudonymous usage
+  events, and collection spans are implemented, but lifecycle log records are
+  not.
 - Only the Anthropic provider has a normalization and aggregation adapter; the
   synthetic mock provider remains an ingestion fixture for local development.
 - The Anthropic integration has been tested only with synthetic mocked HTTP
@@ -155,6 +173,5 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 
 ## Next recommended milestone
 
-Milestone 10: trace each complete collection workflow with one
-`genai.usage.collection` span, safe operational attributes, explicit success and
-failure status, exception recording, and original-exception propagation.
+Milestone 11: emit privacy-safe structured collection lifecycle events for
+workflow start, mapping, aggregation, preview completion, success, and failure.
