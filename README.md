@@ -249,8 +249,25 @@ Prerequisites:
 Create the environment and install locked dependencies:
 
 ```shell
-uv sync --dev
+uv sync --locked --dev
 ```
+
+Start the service in credential-free mock mode:
+
+```shell
+uv run uvicorn genai_usage_observability_gateway.app:app \
+  --host 127.0.0.1 --port 8000 --no-access-log
+```
+
+Then request one synthetic reporting date:
+
+```shell
+curl -X POST "http://127.0.0.1:8000/collect?reporting_date=2026-02-03"
+```
+
+The response is an organization summary for exactly five fictional users. It
+does not contain the pseudonymous per-user events, raw identifiers, emails, or
+fictional group membership processed inside the workflow.
 
 Run the foundation checks:
 
@@ -265,6 +282,33 @@ uv run python -c "import genai_usage_observability_gateway"
 Copy `.env.example` to `.env` only when local configuration is needed. Local
 environment files, credentials, generated previews, caches, and telemetry
 output must never be committed.
+
+## Container
+
+Build and run the service without Compose:
+
+```shell
+docker build -t genai-usage-observability-gateway .
+docker run --rm -p 8000:8000 genai-usage-observability-gateway
+```
+
+The multi-stage image installs the locked production dependency set into a
+non-editable virtual environment, copies only that environment into the runtime
+stage, and runs as numeric user and group `10001`. Its credential-free default
+is synthetic mock mode with preview persistence and HTTP access logs disabled.
+For Anthropic or nondevelopment use, supply the required settings at runtime;
+never bake environment files, keys, or OTLP headers into an image.
+
+No Compose configuration is included because the gateway is stateless and does
+not require a database, frontend, collector, or other companion service.
+
+## Continuous integration
+
+The GitHub Actions quality workflow uses Python 3.13 and the locked dependency
+graph. It checks formatting, linting, strict static typing, the complete test
+suite with terminal and XML coverage reporting plus an 85% minimum, and package
+importability. A separate job builds the container and verifies that its
+application imports while running as user `10001`.
 
 ## License
 

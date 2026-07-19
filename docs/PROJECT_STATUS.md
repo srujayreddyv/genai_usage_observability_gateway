@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 1 through 13 are complete. The project now has a validated Python
+Milestones 1 through 14 are complete. The project now has a validated Python
 foundation, strict provider and common usage models, complete synthetic mock and
 Anthropic collection paths, an explicit privacy boundary, identity-free
 organization aggregation, and a FastAPI service for health, readiness,
@@ -17,7 +17,10 @@ records low-cardinality organization gauges, and emits one pseudonymous usage
 event per protected user. Preview output is generated only after privacy
 processing, can be atomically persisted in development, and defaults off in
 every other environment. The API returns organization summaries only from the
-collection route and uses secret-safe JSON errors at every HTTP boundary.
+collection route and uses secret-safe JSON errors at every HTTP boundary. A
+locked multi-stage container runs the ASGI service as a numeric nonroot user,
+and GitHub Actions enforces the complete local quality gate set and validates
+the container build.
 
 ## Completed
 
@@ -197,6 +200,23 @@ collection route and uses secret-safe JSON errors at every HTTP boundary.
   provider response bodies
 - API contract and provider-service tests covering all routes, status mappings,
   provider selection, mock collection, and preview loading
+- Locked Uvicorn ASGI runtime dependency for local and container execution
+- Multi-stage Python 3.13 container build using the pinned official uv image
+- Non-editable production dependency installation with no source tree or build
+  tool copied into the final runtime image
+- Numeric nonroot runtime user and group `10001`
+- Credential-free container defaults using mock mode with preview persistence
+  and HTTP access logging disabled
+- Focused `.dockerignore` excluding Git metadata, environment files, virtual
+  environments, tests, caches, coverage, documentation, and generated output
+- Least-privilege GitHub Actions workflow for pushes, pull requests, and manual
+  runs with concurrency cancellation
+- Locked dependency synchronization, Ruff formatting and lint checks, strict
+  mypy, complete pytest execution, XML and terminal coverage reporting, an 85%
+  coverage floor, and application import validation in CI
+- Independent container build job proving the packaged application imports as
+  nonroot user `10001`
+- Deliberate omission of Compose because no required companion services exist
 
 ## Validation
 
@@ -224,11 +244,12 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
   responses. No real Analytics API credential or provider connection has been
   tested.
 - No real OTLP collector delivery has been tested.
-- The service is not yet containerized, and continuous integration has not yet
-  been configured.
+- The container build cannot be executed on the current development host
+  because no Docker or Podman engine is installed; the GitHub Actions container
+  job is the reproducible Linux validation boundary.
 
 ## Next recommended milestone
 
-Milestone 14: add nonroot container packaging, GitHub Actions formatting,
-linting, static typing, and test checks, then complete the final documentation
-and deployment validation.
+Milestone 15: expand the README and add focused architecture, privacy,
+provider-extension, and roadmap documents without overstating production
+readiness, real-provider testing, or real collector delivery.
