@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 1 through 15 are complete. The project now has a validated Python
+Milestones 1 through 16 are complete. The project now has a validated Python
 foundation, strict provider and common usage models, complete synthetic mock and
 Anthropic collection paths, an explicit privacy boundary, identity-free
 organization aggregation, and a FastAPI service for health, readiness,
@@ -23,6 +23,9 @@ and GitHub Actions enforces the complete local quality gate set and validates
 the container build. Focused architecture, privacy, provider-extension, and
 roadmap documents now complement the operational README while keeping real
 provider, collector, production-readiness, and performance limitations explicit.
+The complete committed tree has also passed an isolated clean-checkout setup,
+the full quality suite, a credential-free live mock collection, exact telemetry
+count assertions, preview inspection, and final repository safety review.
 
 ## Completed
 
@@ -230,10 +233,23 @@ provider, collector, production-readiness, and performance limitations explicit.
   schemas, mapping, privacy review, telemetry, workflow wiring, and tests
 - Honest roadmap separating validated scope, research candidates, explicit
   non-goals, and unanswered production-readiness questions
+- Clean exported-checkout installation using only the committed project files
+- Live credential-free mock service validation for every documented API route
+- Exact synthetic organization totals for five users, including four active
+  users, 44 chat interactions, 14 developer sessions, 33 accepted tool actions,
+  and nine rejected tool actions
+- Five unique 16-character pseudonymous preview records with raw identities,
+  emails, and fictional groups absent
+- Exactly five correlated `genai_user_usage` events, five lifecycle events,
+  seven mock organization metrics, and one `genai.usage.collection` trace
+- Final tracked-tree and Git-history review for high-confidence credential
+  signatures, non-synthetic email domains, unexpected URL hosts, personal paths,
+  generated previews, and committed environment files
 
 ## Validation
 
-Validated with an isolated `uv`-managed CPython 3.13.13 environment:
+Validated from a clean `git archive` checkout using an isolated `uv`-managed
+CPython 3.13.13 environment:
 
 - Dependency lock and synchronization completed successfully
 - Ruff formatting check passed
@@ -244,6 +260,26 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Installed-package import validation passed and reported version `0.1.0`
 - All repository-local Markdown links resolve
 - Documentation and repository privacy and credential-pattern review passed
+- All six documented HTTP routes were exercised against a live Uvicorn process
+- Mock readiness and collection succeeded with provider, pseudonymization, and
+  OTLP credentials explicitly absent
+- `POST /collect` returned the exact five-user organization aggregation and no
+  per-user records
+- The persisted and served preview matched the organization response and held
+  exactly five unique, correctly formatted pseudonyms
+- In-memory OpenTelemetry exporters confirmed five usage events, five lifecycle
+  events, seven mock organization metrics, and one collection trace with all
+  usage events correlated to it
+- Development console output confirmed privacy-safe local events, metrics, and
+  the collection trace flush during shutdown
+- All ten committed email examples use the reserved `example.com` domain; URL
+  hosts are public, loopback, or reserved `example.test` hosts
+- No high-confidence secret signature or personal filesystem path was found in
+  the tracked tree, and no high-confidence secret signature was found in Git
+  history
+- No populated `.env`, generated preview, private key, or credential file is
+  tracked; ignored local caches and coverage artifacts remain outside commits
+- GitHub Actions workflow YAML parsed successfully
 
 ## Known limitations
 
@@ -265,6 +301,7 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 
 ## Next recommended milestone
 
-Milestone 16: run final clean-clone-equivalent setup and full application,
-telemetry, API, privacy, security, repository, and delivery validation; resolve
-genuine failures and record the final verified project state.
+No implementation milestone remains in the defined version 0.1 plan. Preserve
+the pre-alpha status and repeat the clean-checkout and live mock validation for
+any release candidate. Real-provider or real-collector validation should occur
+only when explicitly authorized infrastructure and credentials are available.

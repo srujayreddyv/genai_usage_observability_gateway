@@ -25,8 +25,8 @@ backend dashboard, or performance workload has been validated.
 
 ## Near-term hardening candidates
 
-- Complete final clean-clone, service, synthetic-output, telemetry-count, API,
-  security, and repository validation for version 0.1.
+- Repeat clean-checkout, service, synthetic-output, telemetry-count, API,
+  security, and repository validation for every release candidate.
 - Exercise the container build on a supported Docker or Podman host and confirm
   the pushed GitHub Actions result.
 - Add documentation checks for internal links, shell examples, and stale public
