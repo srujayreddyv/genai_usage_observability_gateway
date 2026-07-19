@@ -6,6 +6,7 @@ from typing import cast
 from unittest.mock import Mock, create_autospec
 
 import pytest
+from fastapi.routing import APIRoute
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs.export import ConsoleLogRecordExporter
 from opentelemetry.sdk.metrics import MeterProvider
@@ -249,7 +250,16 @@ def test_fastapi_lifespan_initializes_and_stops_telemetry() -> None:
     application = create_app(settings_factory=lambda: settings, manager=manager)
 
     assert manager.active_runtime is None
-    assert application.routes == []
+    assert {
+        route.path for route in application.routes if isinstance(route, APIRoute)
+    } == {
+        "/",
+        "/health",
+        "/health/live",
+        "/health/ready",
+        "/collect",
+        "/preview",
+    }
 
     async def enter_lifespan() -> TelemetryRuntime:
         async with application.router.lifespan_context(application):

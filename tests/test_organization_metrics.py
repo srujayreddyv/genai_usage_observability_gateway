@@ -13,6 +13,7 @@ from opentelemetry.sdk.metrics.export import (
 from genai_usage_observability_gateway.aggregation import (
     AnthropicOrganizationUsageSummary,
     aggregate_anthropic_usage,
+    aggregate_mock_usage,
 )
 from genai_usage_observability_gateway.config import (
     DeploymentEnvironment,
@@ -21,6 +22,7 @@ from genai_usage_observability_gateway.config import (
 from genai_usage_observability_gateway.normalization import (
     AnthropicNormalizedUsageRecord,
     normalize_anthropic_records,
+    normalize_mock_records,
 )
 from genai_usage_observability_gateway.organization_metrics import (
     ALL_ORGANIZATION_METRICS,
@@ -29,6 +31,7 @@ from genai_usage_observability_gateway.organization_metrics import (
     METER_NAME,
     OrganizationMetricEmitter,
 )
+from genai_usage_observability_gateway.providers.mock import build_synthetic_usage
 from genai_usage_observability_gateway.telemetry_attributes import (
     DEPLOYMENT_ENVIRONMENT_NAME,
     ORGANIZATION_METRIC_ATTRIBUTE_KEYS,
@@ -246,7 +249,23 @@ def test_anthropic_instruments_reject_mismatched_provider() -> None:
     emitter = OrganizationMetricEmitter(provider, DeploymentEnvironment.TEST)
     mismatched = _summary().model_copy(update={"provider": ProviderName.MOCK})
     try:
-        with pytest.raises(ValueError, match="require an Anthropic summary"):
+        with pytest.raises(ValueError, match="mock metrics require a mock summary"):
+            emitter.emit(mismatched)
+    finally:
+        provider.shutdown()
+
+
+def test_anthropic_provider_rejects_mock_activity_shape() -> None:
+    provider = MeterProvider(shutdown_on_exit=False)
+    emitter = OrganizationMetricEmitter(provider, DeploymentEnvironment.TEST)
+    mock_summary = aggregate_mock_usage(
+        normalize_mock_records(
+            build_synthetic_usage(_normalized_records()[0].reporting_date)
+        )
+    )
+    mismatched = mock_summary.model_copy(update={"provider": ProviderName.ANTHROPIC})
+    try:
+        with pytest.raises(ValueError, match="Anthropic metrics require"):
             emitter.emit(mismatched)
     finally:
         provider.shutdown()

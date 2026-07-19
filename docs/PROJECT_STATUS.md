@@ -2,23 +2,22 @@
 
 ## Current state
 
-Milestones 1 through 12 are complete. The project now has a validated Python
-foundation, cached application configuration, strict common usage models, an
-asynchronous provider protocol, a synthetic mock analytics client, and a strict
-Anthropic Claude Enterprise User Activity API client. Anthropic records can now
-be normalized, pseudonymized, aggregated into identity-free organization
-summaries, and rendered as privacy-safe in-memory previews. An endpoint-free
-FastAPI shell now manages shared OpenTelemetry trace, metric, and log providers
-with console or configured OTLP/HTTP exporters. Privacy-safe organization
-gauges cover generic normalized concepts and explicitly namespaced Anthropic
-concepts. Each protected user record now emits one structured
-`genai_user_usage` event to local JSON and the OpenTelemetry log pipeline. Each
-collection workflow now emits ordered, privacy-safe lifecycle events with
-trace correlation and monotonic elapsed duration. A readable privacy-safe
-preview can be atomically persisted in development and defaults off in every
-other environment. API endpoints remain unimplemented. One
-`genai.usage.collection` span covers each complete Anthropic collection
-workflow.
+Milestones 1 through 13 are complete. The project now has a validated Python
+foundation, strict provider and common usage models, complete synthetic mock and
+Anthropic collection paths, an explicit privacy boundary, identity-free
+organization aggregation, and a FastAPI service for health, readiness,
+collection, and development preview access. The mock provider completes the
+same normalized, pseudonymized, aggregated, traced, and observable lifecycle as
+the real-provider adapter while retaining its own schema and provider label.
+
+Shared OpenTelemetry trace, metric, and log providers support development
+console output or configured OTLP/HTTP export. Every collection uses one
+`genai.usage.collection` span, emits ordered privacy-safe lifecycle events,
+records low-cardinality organization gauges, and emits one pseudonymous usage
+event per protected user. Preview output is generated only after privacy
+processing, can be atomically persisted in development, and defaults off in
+every other environment. The API returns organization summaries only from the
+collection route and uses secret-safe JSON errors at every HTTP boundary.
 
 ## Completed
 
@@ -84,8 +83,8 @@ workflow.
 - Deterministic in-memory JSON preview containing only privacy-safe data
 - Automated proofs that raw identities and group data are absent from serialized
   log, metric-attribute, trace-attribute, and preview sources
-- FastAPI lifespan application shell with no routes or generated documentation
-  endpoints
+- FastAPI lifespan initialization with generated documentation endpoints
+  disabled
 - One shared OpenTelemetry Resource for trace, metric, and log providers
 - Official `service.name`, `service.version`, and current
   `deployment.environment.name` resource conventions
@@ -117,7 +116,7 @@ workflow.
 - Strict `genai_user_usage` body schema built only from post-privacy records
 - Exactly one structured usage event per protected user record in a collection
 - Reporting date, provider, pseudonymous identifier, normalized common activity,
-  and explicitly approved Anthropic activity in each event
+  and explicitly approved provider activity in each event
 - One compact JSON line per event during local development
 - Direct OpenTelemetry Logs API emission with the required EventName and INFO
   severity through the shared LoggerProvider
@@ -126,8 +125,8 @@ workflow.
   paths, or endpoints in actual emitted event bodies or attributes
 - In-memory log-export tests covering exact counts, complete safe fields,
   EventName, severity, JSON parity, provider validation, and privacy
-- In-memory Anthropic collection workflow spanning provider retrieval and
-  validation, normalization, privacy processing, aggregation, telemetry
+- In-memory Anthropic and mock collection workflows spanning provider retrieval
+  and validation, normalization, privacy processing, aggregation, telemetry
   emission, and preview generation
 - Exactly one `genai.usage.collection` span for each complete workflow
 - Bounded trace attributes for provider, client type, reporting date, record
@@ -175,6 +174,29 @@ workflow.
   readable formatting, atomic success and failure, descriptor cleanup,
   environment defaults, workflow integration, and absence of raw identities,
   groups, and secrets
+- Mock normalization and aggregation preserving synthetic product semantics
+  without presenting mock records or metrics as Anthropic data
+- Mock post-privacy collections, organization summaries, usage events,
+  lifecycle events, traces, and development previews
+- Local development and test fallback namespace for mock-only pseudonymization
+  when no real secret is configured
+- `GET /` service metadata and exact endpoint inventory
+- `GET /health` process health and provider-independent `GET /health/live`
+- `GET /health/ready` selected-provider configuration validation without secret
+  values or upstream network access
+- Required date query validation for `POST /collect`
+- Provider-selected collection execution returning only a privacy-safe
+  organization summary and no per-user records
+- Parsed `GET /preview` responses with explicit disabled behavior and `404` for
+  an enabled but absent artifact
+- Consistent JSON error envelopes for input, configuration, provider
+  authentication, authorization, rate limiting, availability, server, schema,
+  preview, collection, HTTP, and unexpected failures
+- Safe HTTP errors that never echo validation input, exception details,
+  credentials, authentication headers, keys, local paths, request URLs, or
+  provider response bodies
+- API contract and provider-service tests covering all routes, status mappings,
+  provider selection, mock collection, and preview loading
 
 ## Validation
 
@@ -184,8 +206,8 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Ruff formatting check passed
 - Ruff lint check passed
 - mypy strict type checking passed
-- pytest passed: 198 tests
-- Source coverage: 100% (1053 statements)
+- pytest passed: 239 tests
+- Source coverage: 100% (1473 statements)
 - Installed-package import validation passed and reported version `0.1.0`
 
 ## Known limitations
@@ -195,18 +217,18 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
   API options are intentionally outside this milestone.
 - Normalized records intentionally retain raw identity only until the privacy
   boundary; downstream code must consume privacy-safe collection models.
-- Preview files are local development artifacts only. No API endpoint exposes
-  or retrieves them yet.
-- OpenTelemetry providers, exporters, organization metrics, pseudonymous usage
-  events, lifecycle events, and collection spans are implemented.
-- Only the Anthropic provider has a normalization and aggregation adapter; the
-  synthetic mock provider remains an ingestion fixture for local development.
+- Preview files remain local development artifacts. When explicitly enabled,
+  the API reads only the configured preview file and validates its complete
+  privacy-safe schema before returning it.
 - The Anthropic integration has been tested only with synthetic mocked HTTP
   responses. No real Analytics API credential or provider connection has been
   tested.
 - No real OTLP collector delivery has been tested.
+- The service is not yet containerized, and continuous integration has not yet
+  been configured.
 
 ## Next recommended milestone
 
-Milestone 13: add the documented FastAPI root, health, collection, and preview
-endpoints without exposing secrets or unsafe configuration.
+Milestone 14: add nonroot container packaging, GitHub Actions formatting,
+linting, static typing, and test checks, then complete the final documentation
+and deployment validation.

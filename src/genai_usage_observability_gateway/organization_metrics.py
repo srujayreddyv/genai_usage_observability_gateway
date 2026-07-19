@@ -13,7 +13,10 @@ from opentelemetry.sdk.metrics import MeterProvider
 
 from genai_usage_observability_gateway import __version__
 from genai_usage_observability_gateway.aggregation import (
+    AnthropicOrganizationActivityTotals,
     AnthropicOrganizationUsageSummary,
+    MockOrganizationActivityTotals,
+    MockOrganizationUsageSummary,
     OfficeProductActivityTotals,
 )
 from genai_usage_observability_gateway.config import (
@@ -223,12 +226,13 @@ def _office_values(product: str, totals: OfficeProductActivityTotals) -> dict[st
     }
 
 
-def _metric_values(
-    summary: AnthropicOrganizationUsageSummary,
+OrganizationSummary = AnthropicOrganizationUsageSummary | MockOrganizationUsageSummary
+
+
+def _generic_metric_values(
+    summary: OrganizationSummary,
 ) -> dict[str, int | float]:
-    provider = summary.provider_activity
-    science = provider.science
-    values: dict[str, int | float] = {
+    return {
         "genai.usage.organization.user.count": summary.total_users,
         "genai.usage.organization.active_user.count": summary.active_users,
         "genai.usage.organization.chat_interaction.count": (
@@ -246,6 +250,15 @@ def _metric_values(
         "genai.usage.organization.tool_action.acceptance_ratio": (
             summary.tool_action_acceptance_rate
         ),
+    }
+
+
+def _anthropic_metric_values(
+    summary: AnthropicOrganizationUsageSummary,
+) -> dict[str, int | float]:
+    provider = summary.provider_activity
+    science = provider.science
+    values: dict[str, int | float] = {
         "anthropic.usage.organization.claude_code.commit.count": (
             provider.commit_count
         ),
@@ -327,16 +340,24 @@ class OrganizationMetricEmitter:
             for spec in ALL_ORGANIZATION_METRICS
         }
 
-    def emit(self, summary: AnthropicOrganizationUsageSummary) -> None:
+    def emit(self, summary: OrganizationSummary) -> None:
         """Record one complete organization summary with allowlisted attributes."""
 
-        if summary.provider is not ProviderName.ANTHROPIC:
-            raise ValueError("Anthropic metrics require an Anthropic summary")
+        values = _generic_metric_values(summary)
+        if summary.provider is ProviderName.ANTHROPIC:
+            if not isinstance(
+                summary.provider_activity,
+                AnthropicOrganizationActivityTotals,
+            ):
+                raise ValueError("Anthropic metrics require an Anthropic summary")
+            values.update(_anthropic_metric_values(summary))
+        elif not isinstance(summary.provider_activity, MockOrganizationActivityTotals):
+            raise ValueError("mock metrics require a mock summary")
         attributes = {
             REPORTING_DATE_ATTRIBUTE: summary.reporting_date.isoformat(),
             DEPLOYMENT_ENVIRONMENT_NAME: self._deployment_environment,
             TELEMETRY_SOURCE: TELEMETRY_SOURCE_VALUE,
             PROVIDER_ATTRIBUTE: summary.provider.value,
         }
-        for name, value in _metric_values(summary).items():
+        for name, value in values.items():
             self._gauges[name].set(value, attributes)

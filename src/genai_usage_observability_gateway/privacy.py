@@ -12,7 +12,9 @@ from pydantic import Field, SecretStr, model_validator
 
 from genai_usage_observability_gateway.aggregation import (
     AnthropicOrganizationUsageSummary,
+    MockOrganizationUsageSummary,
     aggregate_anthropic_usage,
+    aggregate_mock_usage,
 )
 from genai_usage_observability_gateway.config import AppSettings, ProviderName
 from genai_usage_observability_gateway.models.usage import (
@@ -24,6 +26,8 @@ from genai_usage_observability_gateway.models.usage import (
 from genai_usage_observability_gateway.normalization import (
     AnthropicNormalizedUsageRecord,
     AnthropicUsageExtension,
+    MockNormalizedUsageRecord,
+    MockUsageExtension,
 )
 from genai_usage_observability_gateway.providers.anthropic import (
     AnthropicChatMetrics,
@@ -32,6 +36,14 @@ from genai_usage_observability_gateway.providers.anthropic import (
     AnthropicDesignMetrics,
     AnthropicOfficeMetrics,
     AnthropicScienceMetrics,
+)
+from genai_usage_observability_gateway.providers.mock import (
+    MockChatMetrics,
+    MockClaudeCodeMetrics,
+    MockCoworkMetrics,
+    MockDesignMetrics,
+    MockOfficeMetrics,
+    MockScienceMetrics,
 )
 
 PseudonymousIdentifier = Annotated[str, Field(pattern=r"^[0-9a-f]{16}$")]
@@ -93,6 +105,18 @@ class AnthropicPrivacySafeExtension(ProviderUsageExtension):
     last_activity_date: date | None = None
 
 
+class MockPrivacySafeExtension(ProviderUsageExtension):
+    """Synthetic activity explicitly approved beyond the privacy boundary."""
+
+    chat_metrics: MockChatMetrics
+    claude_code_metrics: MockClaudeCodeMetrics
+    cowork_metrics: MockCoworkMetrics
+    design_metrics: MockDesignMetrics
+    office_metrics: MockOfficeMetrics
+    science_metrics: MockScienceMetrics
+    web_search_count: NonNegativeCount
+
+
 PrivacyExtensionT = TypeVar(
     "PrivacyExtensionT",
     bound=ProviderUsageExtension,
@@ -111,6 +135,7 @@ class PrivacySafeUsageRecord(StrictDomainModel, Generic[PrivacyExtensionT]):
 
 
 AnthropicPrivacySafeUsageRecord = PrivacySafeUsageRecord[AnthropicPrivacySafeExtension]
+MockPrivacySafeUsageRecord = PrivacySafeUsageRecord[MockPrivacySafeExtension]
 
 
 class PrivacySafeCollectionMetadata(StrictDomainModel):
@@ -130,6 +155,40 @@ class AnthropicPrivacySafeCollection(StrictDomainModel):
 
     @model_validator(mode="after")
     def validate_consistency(self) -> AnthropicPrivacySafeCollection:
+        """Reject inconsistent dates, providers, counts, or pseudonyms."""
+
+        summary = self.organization_summary
+        if (
+            summary.reporting_date != self.metadata.reporting_date
+            or summary.provider is not self.metadata.provider
+        ):
+            raise ValueError("collection metadata does not match organization summary")
+        if (
+            len(self.usage_records) != self.metadata.record_count
+            or summary.total_users != self.metadata.record_count
+        ):
+            raise ValueError("collection record counts are inconsistent")
+        if any(
+            record.reporting_date != self.metadata.reporting_date
+            or record.provider is not self.metadata.provider
+            for record in self.usage_records
+        ):
+            raise ValueError("collection records do not match collection metadata")
+        pseudonyms = {record.pseudonymous_user_id for record in self.usage_records}
+        if len(pseudonyms) != len(self.usage_records):
+            raise ValueError("collection contains duplicate pseudonymous identifiers")
+        return self
+
+
+class MockPrivacySafeCollection(StrictDomainModel):
+    """Sanitized synthetic source for telemetry and preview generation."""
+
+    metadata: PrivacySafeCollectionMetadata
+    organization_summary: MockOrganizationUsageSummary
+    usage_records: tuple[MockPrivacySafeUsageRecord, ...]
+
+    @model_validator(mode="after")
+    def validate_consistency(self) -> MockPrivacySafeCollection:
         """Reject inconsistent dates, providers, counts, or pseudonyms."""
 
         summary = self.organization_summary
@@ -202,6 +261,58 @@ def protect_anthropic_collection(
         metadata=PrivacySafeCollectionMetadata(
             reporting_date=summary.reporting_date,
             provider=summary.provider,
+            record_count=len(protected_records),
+        ),
+        organization_summary=summary,
+        usage_records=protected_records,
+    )
+
+
+def protect_mock_record(
+    record: MockNormalizedUsageRecord,
+    pseudonymizer: HmacSha256Pseudonymizer,
+) -> MockPrivacySafeUsageRecord:
+    """Remove fictional raw identity and retain only the mock activity schema."""
+
+    extension = record.provider_extension
+    if record.provider is not ProviderName.MOCK or not isinstance(
+        extension, MockUsageExtension
+    ):
+        raise ValueError("privacy processing requires a normalized mock record")
+    return MockPrivacySafeUsageRecord(
+        reporting_date=record.reporting_date,
+        provider=ProviderName.MOCK,
+        pseudonymous_user_id=pseudonymizer.pseudonymize(
+            ProviderName.MOCK,
+            record.identity.provider_user_id,
+        ),
+        activity=record.activity,
+        provider_extension=MockPrivacySafeExtension(
+            chat_metrics=extension.chat_metrics,
+            claude_code_metrics=extension.claude_code_metrics,
+            cowork_metrics=extension.cowork_metrics,
+            design_metrics=extension.design_metrics,
+            office_metrics=extension.office_metrics,
+            science_metrics=extension.science_metrics,
+            web_search_count=extension.web_search_count,
+        ),
+    )
+
+
+def protect_mock_collection(
+    records: Sequence[MockNormalizedUsageRecord],
+    pseudonymizer: HmacSha256Pseudonymizer,
+) -> MockPrivacySafeCollection:
+    """Create the only synthetic collection allowed beyond privacy handling."""
+
+    summary = aggregate_mock_usage(records)
+    protected_records = tuple(
+        protect_mock_record(record, pseudonymizer) for record in records
+    )
+    return MockPrivacySafeCollection(
+        metadata=PrivacySafeCollectionMetadata(
+            reporting_date=summary.reporting_date,
+            provider=ProviderName.MOCK,
             record_count=len(protected_records),
         ),
         organization_summary=summary,

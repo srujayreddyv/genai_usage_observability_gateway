@@ -20,6 +20,9 @@ from genai_usage_observability_gateway.privacy import (
     AnthropicPrivacySafeCollection,
     AnthropicPrivacySafeExtension,
     AnthropicPrivacySafeUsageRecord,
+    MockPrivacySafeCollection,
+    MockPrivacySafeExtension,
+    MockPrivacySafeUsageRecord,
     PseudonymousIdentifier,
 )
 
@@ -54,6 +57,35 @@ class AnthropicUsageEvent(StrictDomainModel):
         )
 
 
+class MockUsageEvent(StrictDomainModel):
+    """One allowlisted event body produced from a protected synthetic record."""
+
+    event_name: Literal["genai_user_usage"] = USAGE_EVENT_NAME
+    reporting_date: date
+    provider: Literal[ProviderName.MOCK]
+    pseudonymous_user_id: PseudonymousIdentifier
+    common_activity: CommonUsageActivity
+    mock_activity: MockPrivacySafeExtension
+
+    @classmethod
+    def from_record(cls, record: MockPrivacySafeUsageRecord) -> MockUsageEvent:
+        """Build an event only from the synthetic post-privacy boundary."""
+
+        if record.provider is not ProviderName.MOCK:
+            raise ValueError("mock usage events require a mock record")
+        return cls(
+            reporting_date=record.reporting_date,
+            provider=ProviderName.MOCK,
+            pseudonymous_user_id=record.pseudonymous_user_id,
+            common_activity=record.activity,
+            mock_activity=record.provider_extension,
+        )
+
+
+UsageEvent = AnthropicUsageEvent | MockUsageEvent
+PrivacySafeCollection = AnthropicPrivacySafeCollection | MockPrivacySafeCollection
+
+
 class UsageEventEmitter:
     """Mirror each logical usage event to local JSON and OpenTelemetry logs."""
 
@@ -80,14 +112,18 @@ class UsageEventEmitter:
         logger.addHandler(handler)
         return logger
 
-    def emit_collection(self, collection: AnthropicPrivacySafeCollection) -> int:
+    def emit_collection(self, collection: PrivacySafeCollection) -> int:
         """Emit exactly one event for each protected record in the collection."""
 
-        for record in collection.usage_records:
-            self.emit(AnthropicUsageEvent.from_record(record))
+        if isinstance(collection, AnthropicPrivacySafeCollection):
+            for anthropic_record in collection.usage_records:
+                self.emit(AnthropicUsageEvent.from_record(anthropic_record))
+        else:
+            for mock_record in collection.usage_records:
+                self.emit(MockUsageEvent.from_record(mock_record))
         return len(collection.usage_records)
 
-    def emit(self, event: AnthropicUsageEvent) -> None:
+    def emit(self, event: UsageEvent) -> None:
         """Emit one structured event to every configured destination."""
 
         body = event.model_dump(mode="json")

@@ -70,6 +70,7 @@ from genai_usage_observability_gateway.workflow import (
     COLLECTION_STATUS_SUCCESS,
     COLLECTION_TRACER_NAME,
     AnthropicCollectionWorkflow,
+    MockCollectionWorkflow,
 )
 from tests.factories import (
     anthropic_activity_payload,
@@ -513,3 +514,33 @@ def test_workflow_default_collection_timestamp_is_utc(
 
     assert preview.collection_timestamp.tzinfo is UTC
     assert preview.collection_timestamp.utcoffset() == timedelta(0)
+
+
+def test_mock_workflow_rejects_non_mock_client_and_records_safe_failure(
+    telemetry_harness: TelemetryHarness,
+) -> None:
+    workflow = MockCollectionWorkflow(
+        client=InMemoryAnthropicClient(),  # type: ignore[arg-type]
+        pseudonymizer=HmacSha256Pseudonymizer(SecretStr(SYNTHETIC_KEY)),
+        telemetry=telemetry_harness.runtime,
+    )
+
+    with pytest.raises(ValueError, match="requires a mock client"):
+        asyncio.run(workflow.collect(REPORTING_DATE))
+
+    span = telemetry_harness.span_exporter.get_finished_spans()[0]
+    assert span.status.status_code is StatusCode.ERROR
+    assert span.attributes == {
+        PROVIDER_ATTRIBUTE: "mock",
+        CLIENT_TYPE_ATTRIBUTE: "in_memory",
+        REPORTING_DATE_ATTRIBUTE: "2026-02-03",
+        COLLECTION_STATUS_ATTRIBUTE: COLLECTION_STATUS_FAILED,
+    }
+    lifecycle_logs = _logs_for_scope(
+        telemetry_harness.log_exporter,
+        COLLECTION_LIFECYCLE_LOGGER_NAME,
+    )
+    assert [record.log_record.event_name for record in lifecycle_logs] == [
+        CollectionLifecycleEventName.STARTED.value,
+        CollectionLifecycleEventName.FAILED.value,
+    ]
