@@ -47,6 +47,9 @@ from genai_usage_observability_gateway.config import (
     AppSettings,
     DeploymentEnvironment,
 )
+from genai_usage_observability_gateway.lifecycle_events import (
+    CollectionLifecycleEmitter,
+)
 from genai_usage_observability_gateway.organization_metrics import (
     OrganizationMetricEmitter,
 )
@@ -126,6 +129,7 @@ class TelemetryRuntime:
     export_mode: TelemetryExportMode
     organization_metrics: OrganizationMetricEmitter = field(init=False)
     usage_events: UsageEventEmitter = field(init=False)
+    lifecycle_events: CollectionLifecycleEmitter = field(init=False)
     _shutdown: bool = field(default=False, init=False, repr=False)
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
 
@@ -141,6 +145,14 @@ class TelemetryRuntime:
             deployment_environment,
         )
         self.usage_events = UsageEventEmitter(
+            self.logger_provider,
+            local_stream=(
+                sys.stdout
+                if deployment_environment is DeploymentEnvironment.DEVELOPMENT
+                else None
+            ),
+        )
+        self.lifecycle_events = CollectionLifecycleEmitter(
             self.logger_provider,
             local_stream=(
                 sys.stdout

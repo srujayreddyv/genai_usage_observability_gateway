@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 1 through 10 are complete. The project now has a validated Python
+Milestones 1 through 11 are complete. The project now has a validated Python
 foundation, cached application configuration, strict common usage models, an
 asynchronous provider protocol, a synthetic mock analytics client, and a strict
 Anthropic Claude Enterprise User Activity API client. Anthropic records can now
@@ -12,10 +12,11 @@ FastAPI shell now manages shared OpenTelemetry trace, metric, and log providers
 with console or configured OTLP/HTTP exporters. Privacy-safe organization
 gauges cover generic normalized concepts and explicitly namespaced Anthropic
 concepts. Each protected user record now emits one structured
-`genai_user_usage` event to local JSON and the OpenTelemetry log pipeline.
-Lifecycle logs and API endpoints remain unimplemented. One
-`genai.usage.collection` span now covers each complete in-memory Anthropic
-collection workflow.
+`genai_user_usage` event to local JSON and the OpenTelemetry log pipeline. Each
+collection workflow now emits ordered, privacy-safe lifecycle events with
+trace correlation and monotonic elapsed duration. API endpoints remain
+unimplemented. One `genai.usage.collection` span covers each complete in-memory
+Anthropic collection workflow.
 
 ## Completed
 
@@ -139,6 +140,23 @@ collection workflow.
   source paths or sensitive exception details from entering trace data
 - Successful and failed in-memory span-export tests covering output generation,
   status, attributes, event count, trace privacy, and provider mismatch
+- Strict lifecycle event schema limited to reporting date, provider, bounded
+  client type, collection status, cumulative duration, and record count
+- Ordered `collection_started`, `records_mapped`, `aggregation_completed`,
+  `preview_written`, and `collection_completed` success checkpoints
+- Alternative ERROR-severity `collection_failed` event with no exception body,
+  message, credential, configuration, identity, endpoint, or path data
+- Cumulative workflow durations measured with a monotonic nanosecond clock and
+  emitted as nonnegative whole milliseconds
+- Record counts omitted before mapping, included on every later checkpoint, and
+  retained on failures occurring after mapping
+- Direct OpenTelemetry EventName emission through the shared LoggerProvider and
+  compact JSON lifecycle records in development
+- Lifecycle events correlated to the active collection trace and independently
+  scoped from pseudonymous per-user usage events
+- In-memory and local-stream tests covering event order, exact attribute
+  allowlists, duration values, severity, status consistency, trace correlation,
+  success, early failure, post-mapping failure, and privacy
 
 ## Validation
 
@@ -148,8 +166,8 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Ruff formatting check passed
 - Ruff lint check passed
 - mypy strict type checking passed
-- pytest passed: 168 tests
-- Source coverage: 100% (892 statements)
+- pytest passed: 181 tests
+- Source coverage: 100% (981 statements)
 - Installed-package import validation passed and reported version `0.1.0`
 
 ## Known limitations
@@ -162,8 +180,7 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Preview rendering is currently in-memory only. No API endpoint or local file
   workflow exposes it yet.
 - OpenTelemetry providers, exporters, organization metrics, pseudonymous usage
-  events, and collection spans are implemented, but lifecycle log records are
-  not.
+  events, lifecycle events, and collection spans are implemented.
 - Only the Anthropic provider has a normalization and aggregation adapter; the
   synthetic mock provider remains an ingestion fixture for local development.
 - The Anthropic integration has been tested only with synthetic mocked HTTP
@@ -173,5 +190,5 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 
 ## Next recommended milestone
 
-Milestone 11: emit privacy-safe structured collection lifecycle events for
-workflow start, mapping, aggregation, preview completion, success, and failure.
+Milestone 12: write the privacy-safe development preview as readable JSON using
+atomic replacement, temporary test locations, and environment-aware enablement.

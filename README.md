@@ -3,7 +3,7 @@
 An extensible, privacy-conscious GenAI usage observability gateway that
 collects enterprise AI usage analytics, normalizes provider data, applies
 privacy controls, and exports organization metrics, pseudonymous usage events,
-and collection workflow traces through OpenTelemetry.
+collection lifecycle events, and workflow traces through OpenTelemetry.
 
 Anthropic Claude Enterprise is planned as the first reference provider
 implementation. A synthetic mock provider will support local development and
@@ -104,9 +104,8 @@ summaries for metrics, and pseudonymous user records for usage events and
 previews. The in-memory JSON preview contains pseudonyms but no emails, raw
 provider identifiers, organizational groups, or secret values.
 
-Automated privacy contract tests cover structured usage events, metric
-attributes, workflow spans, and preview output. Lifecycle log records are
-intentionally deferred to a later milestone.
+Automated privacy contract tests cover structured usage events, lifecycle
+events, metric attributes, workflow spans, and preview output.
 
 ## OpenTelemetry foundation
 
@@ -170,6 +169,24 @@ OpenTelemetry API, set the span status to error, mark the collection `failed`,
 and re-raise the original exception. Exception messages and stack traces are
 replaced with fixed privacy-safe event values so credentials, identities, or
 local source paths cannot enter trace data.
+
+## Collection lifecycle events
+
+Each collection emits named `collection_started`, `records_mapped`,
+`aggregation_completed`, `preview_written`, and `collection_completed`
+OpenTelemetry log events in order. A failed collection emits
+`collection_failed` instead of later success checkpoints. Normal checkpoints
+use INFO severity; failure uses ERROR severity without copying the exception or
+its message into the log record.
+
+Lifecycle attributes are limited to custom project fields for reporting date,
+provider, bounded client type, collection status, cumulative monotonic duration
+in whole milliseconds, and record count once mapping has completed. Records are
+emitted inside the collection span and inherit its trace context. Development
+also receives one compact JSON line per lifecycle event. The currently named
+`preview_written` checkpoint means the privacy-safe in-memory preview payload
+has been produced; writing that payload atomically to a development file is the
+next milestone.
 
 ## Development setup
 

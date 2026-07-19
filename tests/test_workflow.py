@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date
+from time import monotonic_ns
 
 import pytest
 from opentelemetry import trace
+from opentelemetry._logs import SeverityNumber
 from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk._logs._internal import ReadableLogRecord
 from opentelemetry.sdk._logs.export import (
     InMemoryLogRecordExporter,
     SimpleLogRecordProcessor,
@@ -24,10 +27,17 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
 from opentelemetry.trace import StatusCode
 from pydantic import SecretStr
 
+from genai_usage_observability_gateway.aggregation import EmptyAggregationError
 from genai_usage_observability_gateway.config import (
     AppSettings,
     DeploymentEnvironment,
     ProviderName,
+)
+from genai_usage_observability_gateway.lifecycle_events import (
+    COLLECTION_LIFECYCLE_LOGGER_NAME,
+    CollectionClientType,
+    CollectionLifecycleEventName,
+    CollectionLifecycleStatus,
 )
 from genai_usage_observability_gateway.preview import render_usage_preview
 from genai_usage_observability_gateway.privacy import HmacSha256Pseudonymizer
@@ -41,19 +51,21 @@ from genai_usage_observability_gateway.telemetry import (
 )
 from genai_usage_observability_gateway.telemetry_attributes import (
     CLIENT_TYPE_ATTRIBUTE,
+    COLLECTION_DURATION_MS_ATTRIBUTE,
+    COLLECTION_LIFECYCLE_ATTRIBUTE_KEYS,
     COLLECTION_STATUS_ATTRIBUTE,
     COLLECTION_TRACE_ATTRIBUTE_KEYS,
     PROVIDER_ATTRIBUTE,
     RECORD_COUNT_ATTRIBUTE,
     REPORTING_DATE_ATTRIBUTE,
 )
+from genai_usage_observability_gateway.usage_events import USAGE_EVENT_LOGGER_NAME
 from genai_usage_observability_gateway.workflow import (
     COLLECTION_SPAN_NAME,
     COLLECTION_STATUS_FAILED,
     COLLECTION_STATUS_SUCCESS,
     COLLECTION_TRACER_NAME,
     AnthropicCollectionWorkflow,
-    CollectionClientType,
 )
 from tests.factories import (
     anthropic_activity_payload,
@@ -152,12 +164,15 @@ def _raw_records() -> tuple[AnthropicUserActivityRecord, ...]:
 def _workflow(
     client: InMemoryAnthropicClient,
     telemetry: TelemetryRuntime,
+    *,
+    clock_ns: Callable[[], int] = monotonic_ns,
 ) -> AnthropicCollectionWorkflow:
     return AnthropicCollectionWorkflow(
         client=client,
         client_type=CollectionClientType.IN_MEMORY,
         pseudonymizer=HmacSha256Pseudonymizer(SecretStr(SYNTHETIC_KEY)),
         telemetry=telemetry,
+        clock_ns=clock_ns,
     )
 
 
@@ -171,12 +186,37 @@ def _metric_count(reader: InMemoryMetricReader) -> int:
     )
 
 
+def _logs_for_scope(
+    exporter: InMemoryLogRecordExporter,
+    scope_name: str,
+) -> tuple[ReadableLogRecord, ...]:
+    return tuple(
+        readable
+        for readable in exporter.get_finished_logs()
+        if readable.instrumentation_scope is not None
+        and readable.instrumentation_scope.name == scope_name
+    )
+
+
 def test_successful_workflow_has_one_safe_span_and_complete_outputs(
     telemetry_harness: TelemetryHarness,
 ) -> None:
     client = InMemoryAnthropicClient(_raw_records())
+    clock_values = iter(
+        (
+            10_000_000_000,
+            10_002_000_000,
+            10_005_000_000,
+            10_009_000_000,
+            10_015_000_000,
+        )
+    )
     preview = asyncio.run(
-        _workflow(client, telemetry_harness.runtime).collect(REPORTING_DATE)
+        _workflow(
+            client,
+            telemetry_harness.runtime,
+            clock_ns=lambda: next(clock_values),
+        ).collect(REPORTING_DATE)
     )
 
     spans = telemetry_harness.span_exporter.get_finished_spans()
@@ -200,11 +240,56 @@ def test_successful_workflow_has_one_safe_span_and_complete_outputs(
     assert preview.metadata.record_count == 2
     assert _metric_count(telemetry_harness.metric_reader) == 42
 
-    usage_logs = telemetry_harness.log_exporter.get_finished_logs()
+    usage_logs = _logs_for_scope(
+        telemetry_harness.log_exporter,
+        USAGE_EVENT_LOGGER_NAME,
+    )
     assert len(usage_logs) == 2
     for readable in usage_logs:
         assert readable.log_record.trace_id == span.context.trace_id
         assert readable.log_record.span_id == span.context.span_id
+
+    lifecycle_logs = _logs_for_scope(
+        telemetry_harness.log_exporter,
+        COLLECTION_LIFECYCLE_LOGGER_NAME,
+    )
+    assert [readable.log_record.event_name for readable in lifecycle_logs] == [
+        CollectionLifecycleEventName.STARTED.value,
+        CollectionLifecycleEventName.RECORDS_MAPPED.value,
+        CollectionLifecycleEventName.AGGREGATION_COMPLETED.value,
+        CollectionLifecycleEventName.PREVIEW_WRITTEN.value,
+        CollectionLifecycleEventName.COMPLETED.value,
+    ]
+    lifecycle_attributes = []
+    for readable in lifecycle_logs:
+        attributes = readable.log_record.attributes
+        assert attributes is not None
+        lifecycle_attributes.append(attributes)
+    assert [
+        attributes[COLLECTION_DURATION_MS_ATTRIBUTE]
+        for attributes in lifecycle_attributes
+    ] == [0, 2, 5, 9, 15]
+    assert [
+        attributes[COLLECTION_STATUS_ATTRIBUTE] for attributes in lifecycle_attributes
+    ] == [
+        CollectionLifecycleStatus.STARTED.value,
+        CollectionLifecycleStatus.IN_PROGRESS.value,
+        CollectionLifecycleStatus.IN_PROGRESS.value,
+        CollectionLifecycleStatus.IN_PROGRESS.value,
+        CollectionLifecycleStatus.SUCCESS.value,
+    ]
+    for index, readable in enumerate(lifecycle_logs):
+        log_record = readable.log_record
+        assert log_record.body is None
+        assert log_record.trace_id == span.context.trace_id
+        assert log_record.span_id == span.context.span_id
+        assert log_record.attributes is not None
+        expected_keys = COLLECTION_LIFECYCLE_ATTRIBUTE_KEYS
+        if index == 0:
+            expected_keys = expected_keys - {RECORD_COUNT_ATTRIBUTE}
+        assert set(log_record.attributes) == expected_keys
+        if index > 0:
+            assert log_record.attributes[RECORD_COUNT_ATTRIBUTE] == 2
 
 
 def test_success_span_attributes_and_preview_exclude_sensitive_data(
@@ -219,6 +304,15 @@ def test_success_span_attributes_and_preview_exclude_sensitive_data(
     span = telemetry_harness.span_exporter.get_finished_spans()[0]
     serialized_attributes = repr(dict(span.attributes or {}))
     serialized_preview = render_usage_preview(preview)
+    serialized_lifecycle = repr(
+        [
+            readable.log_record.attributes
+            for readable in _logs_for_scope(
+                telemetry_harness.log_exporter,
+                COLLECTION_LIFECYCLE_LOGGER_NAME,
+            )
+        ]
+    )
 
     for raw_record in raw_records:
         raw_identity = raw_record.activity.user
@@ -226,6 +320,8 @@ def test_success_span_attributes_and_preview_exclude_sensitive_data(
         assert str(raw_identity.email_address) not in serialized_attributes
         assert raw_identity.id not in serialized_preview
         assert str(raw_identity.email_address) not in serialized_preview
+        assert raw_identity.id not in serialized_lifecycle
+        assert str(raw_identity.email_address) not in serialized_lifecycle
     for protected in preview.usage_records:
         assert protected.pseudonymous_user_id not in serialized_attributes
     for forbidden in (
@@ -238,6 +334,7 @@ def test_success_span_attributes_and_preview_exclude_sensitive_data(
         "api.endpoint",
     ):
         assert forbidden not in serialized_attributes
+        assert forbidden not in serialized_lifecycle
 
 
 def test_failed_workflow_records_exception_and_reraises_same_instance(
@@ -245,10 +342,15 @@ def test_failed_workflow_records_exception_and_reraises_same_instance(
 ) -> None:
     failure = SyntheticCollectionError("synthetic upstream failure detail")
     client = InMemoryAnthropicClient(exception=failure)
+    clock_values = iter((20_000_000_000, 20_007_000_000))
 
     with pytest.raises(SyntheticCollectionError) as exc_info:
         asyncio.run(
-            _workflow(client, telemetry_harness.runtime).collect(REPORTING_DATE)
+            _workflow(
+                client,
+                telemetry_harness.runtime,
+                clock_ns=lambda: next(clock_values),
+            ).collect(REPORTING_DATE)
         )
 
     assert exc_info.value is failure
@@ -276,7 +378,32 @@ def test_failed_workflow_records_exception_and_reraises_same_instance(
         "exception.escaped": "True",
     }
     assert str(failure) not in repr(exception_event.attributes)
-    assert telemetry_harness.log_exporter.get_finished_logs() == ()
+    assert (
+        _logs_for_scope(
+            telemetry_harness.log_exporter,
+            USAGE_EVENT_LOGGER_NAME,
+        )
+        == ()
+    )
+    lifecycle_logs = _logs_for_scope(
+        telemetry_harness.log_exporter,
+        COLLECTION_LIFECYCLE_LOGGER_NAME,
+    )
+    assert [readable.log_record.event_name for readable in lifecycle_logs] == [
+        CollectionLifecycleEventName.STARTED.value,
+        CollectionLifecycleEventName.FAILED.value,
+    ]
+    failed_log = lifecycle_logs[-1].log_record
+    assert failed_log.severity_number is SeverityNumber.ERROR
+    assert failed_log.body is None
+    assert failed_log.attributes == {
+        REPORTING_DATE_ATTRIBUTE: "2026-02-03",
+        PROVIDER_ATTRIBUTE: "anthropic",
+        CLIENT_TYPE_ATTRIBUTE: "in_memory",
+        COLLECTION_STATUS_ATTRIBUTE: CollectionLifecycleStatus.FAILED.value,
+        COLLECTION_DURATION_MS_ATTRIBUTE: 7,
+    }
+    assert str(failure) not in repr(failed_log.attributes)
 
 
 def test_mismatched_provider_fails_inside_the_collection_span(
@@ -295,3 +422,38 @@ def test_mismatched_provider_fails_inside_the_collection_span(
     assert spans[0].attributes is not None
     assert spans[0].attributes[COLLECTION_STATUS_ATTRIBUTE] == COLLECTION_STATUS_FAILED
     assert client.requested_dates == []
+
+
+def test_failed_lifecycle_includes_record_count_when_mapping_completed(
+    telemetry_harness: TelemetryHarness,
+) -> None:
+    clock_values = iter((30_000_000_000, 30_003_000_000, 30_008_000_000))
+
+    with pytest.raises(
+        EmptyAggregationError,
+        match="organization aggregation requires records",
+    ):
+        asyncio.run(
+            _workflow(
+                InMemoryAnthropicClient(),
+                telemetry_harness.runtime,
+                clock_ns=lambda: next(clock_values),
+            ).collect(REPORTING_DATE)
+        )
+
+    lifecycle_logs = _logs_for_scope(
+        telemetry_harness.log_exporter,
+        COLLECTION_LIFECYCLE_LOGGER_NAME,
+    )
+    assert [readable.log_record.event_name for readable in lifecycle_logs] == [
+        CollectionLifecycleEventName.STARTED.value,
+        CollectionLifecycleEventName.RECORDS_MAPPED.value,
+        CollectionLifecycleEventName.FAILED.value,
+    ]
+    failed_attributes = lifecycle_logs[-1].log_record.attributes
+    assert failed_attributes is not None
+    assert failed_attributes[COLLECTION_STATUS_ATTRIBUTE] == (
+        CollectionLifecycleStatus.FAILED.value
+    )
+    assert failed_attributes[COLLECTION_DURATION_MS_ATTRIBUTE] == 8
+    assert failed_attributes[RECORD_COUNT_ATTRIBUTE] == 0

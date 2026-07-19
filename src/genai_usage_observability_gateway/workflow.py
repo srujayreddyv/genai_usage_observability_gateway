@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
-from enum import StrEnum
+from time import monotonic_ns
 
 from opentelemetry.semconv.attributes.exception_attributes import (
     EXCEPTION_MESSAGE,
@@ -14,6 +15,12 @@ from opentelemetry.trace import Status, StatusCode, Tracer
 
 from genai_usage_observability_gateway import __version__
 from genai_usage_observability_gateway.config import ProviderName
+from genai_usage_observability_gateway.lifecycle_events import (
+    CollectionClientType,
+    CollectionLifecycleEvent,
+    CollectionLifecycleEventName,
+    CollectionLifecycleStatus,
+)
 from genai_usage_observability_gateway.normalization import (
     normalize_anthropic_records,
 )
@@ -50,13 +57,6 @@ _SAFE_EXCEPTION_ATTRIBUTES = {
 }
 
 
-class CollectionClientType(StrEnum):
-    """Bounded client implementations safe for trace attributes."""
-
-    ANTHROPIC_API = "anthropic_api"
-    IN_MEMORY = "in_memory"
-
-
 class AnthropicCollectionWorkflow:
     """Run the complete Anthropic collection path inside one safe span."""
 
@@ -67,11 +67,13 @@ class AnthropicCollectionWorkflow:
         client_type: CollectionClientType,
         pseudonymizer: HmacSha256Pseudonymizer,
         telemetry: TelemetryRuntime,
+        clock_ns: Callable[[], int] = monotonic_ns,
     ) -> None:
         self._client = client
         self._client_type = client_type
         self._pseudonymizer = pseudonymizer
         self._telemetry = telemetry
+        self._clock_ns = clock_ns
         self._tracer: Tracer = telemetry.tracer_provider.get_tracer(
             COLLECTION_TRACER_NAME,
             __version__,
@@ -80,6 +82,8 @@ class AnthropicCollectionWorkflow:
     async def collect(self, reporting_date: date) -> AnthropicUsagePreview:
         """Collect, protect, emit, and preview one UTC reporting date."""
 
+        started_ns = self._clock_ns()
+        record_count: int | None = None
         attributes = {
             PROVIDER_ATTRIBUTE: ProviderName.ANTHROPIC.value,
             CLIENT_TYPE_ATTRIBUTE: self._client_type.value,
@@ -93,6 +97,12 @@ class AnthropicCollectionWorkflow:
             set_status_on_exception=False,
         ) as span:
             try:
+                self._emit_lifecycle(
+                    CollectionLifecycleEventName.STARTED,
+                    CollectionLifecycleStatus.STARTED,
+                    reporting_date,
+                    duration_ms=0,
+                )
                 if self._client.provider is not ProviderName.ANTHROPIC:
                     raise ValueError(
                         "Anthropic collection requires an Anthropic client"
@@ -101,16 +111,52 @@ class AnthropicCollectionWorkflow:
                     reporting_date
                 )
                 normalized_records = normalize_anthropic_records(provider_records)
+                record_count = len(normalized_records)
+                self._emit_lifecycle(
+                    CollectionLifecycleEventName.RECORDS_MAPPED,
+                    CollectionLifecycleStatus.IN_PROGRESS,
+                    reporting_date,
+                    duration_ms=self._elapsed_ms(started_ns),
+                    record_count=record_count,
+                )
                 collection = protect_anthropic_collection(
                     normalized_records,
                     self._pseudonymizer,
+                )
+                self._emit_lifecycle(
+                    CollectionLifecycleEventName.AGGREGATION_COMPLETED,
+                    CollectionLifecycleStatus.IN_PROGRESS,
+                    reporting_date,
+                    duration_ms=self._elapsed_ms(started_ns),
+                    record_count=record_count,
                 )
                 self._telemetry.organization_metrics.emit(
                     collection.organization_summary
                 )
                 self._telemetry.usage_events.emit_collection(collection)
                 preview = build_anthropic_usage_preview_from_collection(collection)
+                self._emit_lifecycle(
+                    CollectionLifecycleEventName.PREVIEW_WRITTEN,
+                    CollectionLifecycleStatus.IN_PROGRESS,
+                    reporting_date,
+                    duration_ms=self._elapsed_ms(started_ns),
+                    record_count=record_count,
+                )
+                self._emit_lifecycle(
+                    CollectionLifecycleEventName.COMPLETED,
+                    CollectionLifecycleStatus.SUCCESS,
+                    reporting_date,
+                    duration_ms=self._elapsed_ms(started_ns),
+                    record_count=record_count,
+                )
             except Exception as exception:
+                self._emit_lifecycle(
+                    CollectionLifecycleEventName.FAILED,
+                    CollectionLifecycleStatus.FAILED,
+                    reporting_date,
+                    duration_ms=self._elapsed_ms(started_ns),
+                    record_count=record_count,
+                )
                 span.set_attribute(
                     COLLECTION_STATUS_ATTRIBUTE,
                     COLLECTION_STATUS_FAILED,
@@ -123,9 +169,37 @@ class AnthropicCollectionWorkflow:
                 span.set_status(Status(StatusCode.ERROR))
                 raise
 
-            span.set_attribute(RECORD_COUNT_ATTRIBUTE, len(normalized_records))
+            span.set_attribute(RECORD_COUNT_ATTRIBUTE, record_count)
             span.set_attribute(
                 COLLECTION_STATUS_ATTRIBUTE,
                 COLLECTION_STATUS_SUCCESS,
             )
             return preview
+
+    def _elapsed_ms(self, started_ns: int) -> int:
+        """Return nonnegative elapsed monotonic time in whole milliseconds."""
+
+        return max(0, (self._clock_ns() - started_ns) // 1_000_000)
+
+    def _emit_lifecycle(
+        self,
+        event_name: CollectionLifecycleEventName,
+        status: CollectionLifecycleStatus,
+        reporting_date: date,
+        *,
+        duration_ms: int,
+        record_count: int | None = None,
+    ) -> None:
+        """Build and emit one strict lifecycle event inside the active span."""
+
+        self._telemetry.lifecycle_events.emit(
+            CollectionLifecycleEvent(
+                event_name=event_name,
+                reporting_date=reporting_date,
+                provider=ProviderName.ANTHROPIC,
+                client_type=self._client_type,
+                collection_status=status,
+                duration_ms=duration_ms,
+                record_count=record_count,
+            )
+        )

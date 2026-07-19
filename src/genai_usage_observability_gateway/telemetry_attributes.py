@@ -15,6 +15,7 @@ PROVIDER_ATTRIBUTE = "genai.usage.provider.name"
 CLIENT_TYPE_ATTRIBUTE = "genai.usage.client.type"
 RECORD_COUNT_ATTRIBUTE = "genai.usage.record.count"
 COLLECTION_STATUS_ATTRIBUTE = "genai.usage.collection.status"
+COLLECTION_DURATION_MS_ATTRIBUTE = "genai.usage.collection.duration_ms"
 
 ORGANIZATION_METRIC_ATTRIBUTE_KEYS = frozenset(
     {
@@ -32,5 +33,16 @@ COLLECTION_TRACE_ATTRIBUTE_KEYS = frozenset(
         CLIENT_TYPE_ATTRIBUTE,
         RECORD_COUNT_ATTRIBUTE,
         COLLECTION_STATUS_ATTRIBUTE,
+    }
+)
+
+COLLECTION_LIFECYCLE_ATTRIBUTE_KEYS = frozenset(
+    {
+        REPORTING_DATE_ATTRIBUTE,
+        PROVIDER_ATTRIBUTE,
+        CLIENT_TYPE_ATTRIBUTE,
+        RECORD_COUNT_ATTRIBUTE,
+        COLLECTION_STATUS_ATTRIBUTE,
+        COLLECTION_DURATION_MS_ATTRIBUTE,
     }
 )
