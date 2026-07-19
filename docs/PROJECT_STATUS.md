@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 1 through 14 are complete. The project now has a validated Python
+Milestones 1 through 15 are complete. The project now has a validated Python
 foundation, strict provider and common usage models, complete synthetic mock and
 Anthropic collection paths, an explicit privacy boundary, identity-free
 organization aggregation, and a FastAPI service for health, readiness,
@@ -20,7 +20,9 @@ every other environment. The API returns organization summaries only from the
 collection route and uses secret-safe JSON errors at every HTTP boundary. A
 locked multi-stage container runs the ASGI service as a numeric nonroot user,
 and GitHub Actions enforces the complete local quality gate set and validates
-the container build.
+the container build. Focused architecture, privacy, provider-extension, and
+roadmap documents now complement the operational README while keeping real
+provider, collector, production-readiness, and performance limitations explicit.
 
 ## Completed
 
@@ -217,6 +219,17 @@ the container build.
 - Independent container build job proving the packaged application imports as
   nonroot user `10001`
 - Deliberate omission of Compose because no required companion services exist
+- Expanded README covering the business problem, architecture, signal choices,
+  complete configuration, provider modes, API examples, telemetry, project
+  layout, security, privacy, limitations, roadmap, and provider extension
+- Focused architecture document describing component responsibilities, trust
+  boundaries, common and provider-specific data, and deployment constraints
+- Focused privacy document describing data lifecycle, HMAC pseudonymization,
+  enforced guarantees, residual risks, and operator responsibilities
+- Provider-extension guide covering public documentation, configuration,
+  schemas, mapping, privacy review, telemetry, workflow wiring, and tests
+- Honest roadmap separating validated scope, research candidates, explicit
+  non-goals, and unanswered production-readiness questions
 
 ## Validation
 
@@ -229,6 +242,8 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - pytest passed: 239 tests
 - Source coverage: 100% (1473 statements)
 - Installed-package import validation passed and reported version `0.1.0`
+- All repository-local Markdown links resolve
+- Documentation and repository privacy and credential-pattern review passed
 
 ## Known limitations
 
@@ -250,6 +265,6 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 
 ## Next recommended milestone
 
-Milestone 15: expand the README and add focused architecture, privacy,
-provider-extension, and roadmap documents without overstating production
-readiness, real-provider testing, or real collector delivery.
+Milestone 16: run final clean-clone-equivalent setup and full application,
+telemetry, API, privacy, security, repository, and delivery validation; resolve
+genuine failures and record the final verified project state.

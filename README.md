@@ -9,6 +9,23 @@ Anthropic Claude Enterprise is the first reference provider implementation. A
 synthetic mock provider supports the complete local workflow and API without
 external credentials.
 
+## Goal and business problem
+
+Enterprise GenAI tools can be licensed broadly while decision-makers still
+lack a trustworthy view of adoption: how many people use the tools, whether
+usage changes over time, which exposed capabilities are used, and whether
+developer-oriented features receive observable activity. Provider analytics
+APIs expose parts of that picture, but their schemas differ and sending raw
+employee identities into another telemetry system creates avoidable privacy
+risk.
+
+This project explores a provider-extensible boundary that retrieves available
+analytics, validates and normalizes only honest common concepts, removes raw
+identity, aggregates organization totals, and exports privacy-conscious
+OpenTelemetry signals. Adoption visibility can inform license and enablement
+decisions, but it is only one input: the gateway does not turn activity counts
+into conclusions about people or business outcomes.
+
 ## Scope
 
 This project focuses on usage and adoption observability. It is not a complete
@@ -28,6 +45,42 @@ normalization, privacy, aggregation, preview, and OpenTelemetry foundations. It
 is not production-ready. See
 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) for completed work, known
 limitations, and the next planned milestone.
+
+## Architecture
+
+```text
+Provider analytics APIs
+        |
+Provider adapters and strict response validation
+        |
+Small common usage model + provider-owned extensions
+        |
+HMAC pseudonymization and explicit privacy-safe models
+        |
+Organization aggregation
+        |
+OpenTelemetry metrics, logs/events, and traces
+        |
+OTLP/HTTP -> operator-selected collector and backend
+```
+
+The provider protocol owns asynchronous retrieval for one UTC reporting date.
+Each adapter also owns its response schema, normalization function, privacy-safe
+extension, organization aggregation, and provider-specific telemetry. The
+common model is deliberately small so future adapters are not forced to label
+provider-only data as portable.
+
+Signal choice follows data shape:
+
+- Organization totals use metrics because they are identity-free, bounded,
+  low-cardinality measurements suited to trend and utilization views.
+- Pseudonymous per-user activity uses structured log events because each
+  protected record is a discrete, inspectable observation, not a metric label.
+- The complete collection uses one trace because retrieval, mapping, privacy,
+  aggregation, emission, and preview generation form one operational workflow.
+
+See [Architecture](docs/architecture.md) for component boundaries, data flow,
+and the common-versus-provider-specific design.
 
 ## Configuration
 
@@ -53,6 +106,23 @@ configuration only and are never attached to telemetry.
 In development and test, mock mode uses an application-owned synthetic
 pseudonymization namespace when `PSEUDONYMIZATION_KEY` is unset. Real provider
 workflows and nonlocal environments never receive that fallback.
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `APP_ENVIRONMENT` | `development`, `test`, `staging`, or `production` | `development` |
+| `ANALYTICS_PROVIDER` | Select `mock` or `anthropic` | `mock` |
+| `PSEUDONYMIZATION_KEY` | Secret HMAC key; required for Anthropic and outside local environments | unset |
+| `ANTHROPIC_ANALYTICS_API_KEY` | Claude Enterprise Analytics API key | unset |
+| `ANTHROPIC_RESULT_LIMIT` | Upstream page size from 1 through 1000 | `100` |
+| `ANTHROPIC_REQUEST_TIMEOUT_SECONDS` | Positive upstream request timeout, at most 120 seconds | `10` |
+| `PREVIEW_ENABLED` | Explicit preview override; empty uses the environment default | environment-aware |
+| `PREVIEW_OUTPUT_PATH` | Local development preview destination | `telemetry-output/usage-preview.json` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP collector base URL | unset |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Percent-encoded OTLP header list; treat as secret | unset |
+
+Use [.env.example](.env.example) only as a local template. It contains
+placeholders, not usable credentials. Prefer a secret manager or runtime secret
+injection outside local development.
 
 ## Mock provider
 
@@ -244,7 +314,16 @@ request values, headers, credentials, paths, or provider response bodies.
 Prerequisites:
 
 - Python 3.13
-- [`uv`](https://docs.astral.sh/uv/)
+- [`uv`](https://docs.astral.sh/uv/) 0.11 or newer
+
+Install `uv` using its
+[official installation instructions](https://docs.astral.sh/uv/getting-started/installation/),
+then confirm it and Python 3.13 are available:
+
+```shell
+uv --version
+uv python find 3.13
+```
 
 Create the environment and install locked dependencies:
 
@@ -283,6 +362,63 @@ Copy `.env.example` to `.env` only when local configuration is needed. Local
 environment files, credentials, generated previews, caches, and telemetry
 output must never be committed.
 
+### Anthropic mode
+
+Real Anthropic collection requires valid Claude Enterprise Analytics access;
+an ordinary Admin API key is not interchangeable. Inject secrets at runtime:
+
+```shell
+export ANALYTICS_PROVIDER=anthropic
+export PSEUDONYMIZATION_KEY='replace-with-a-secret-from-your-secret-manager'
+export ANTHROPIC_ANALYTICS_API_KEY='replace-with-a-valid-analytics-key'
+uv run uvicorn genai_usage_observability_gateway.app:app \
+  --host 127.0.0.1 --port 8000 --no-access-log
+```
+
+The implementation has been tested with mocked HTTP only. These commands do
+not imply that a real credential, account, or provider connection was tested by
+this project.
+
+## API examples
+
+With the service running on `127.0.0.1:8000`:
+
+```shell
+curl http://127.0.0.1:8000/
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/health/live
+curl http://127.0.0.1:8000/health/ready
+curl -X POST \
+  "http://127.0.0.1:8000/collect?reporting_date=2026-02-03"
+curl http://127.0.0.1:8000/preview
+```
+
+`POST /collect` returns an organization summary only. In default development
+mode the collection also writes a post-privacy preview, so the final request can
+inspect the complete synthetic result. `GET /preview` returns a disabled status
+when preview generation is off and a safe `404` error when it is enabled but no
+artifact exists.
+
+## Console and OTLP telemetry
+
+Development without an OTLP endpoint writes console traces, metric export, and
+compact JSON usage and lifecycle records. Run one collection and observe the
+Uvicorn process output. Some metric exporters emit periodically, so allow the
+process to flush on shutdown.
+
+To target a collector that you operate, configure its base URL and optional
+headers before startup:
+
+```shell
+export OTEL_EXPORTER_OTLP_ENDPOINT='https://collector.example.test:4318'
+export OTEL_EXPORTER_OTLP_HEADERS='authorization=Bearer%20replace-me'
+```
+
+The gateway derives `/v1/traces`, `/v1/metrics`, and `/v1/logs`. The example
+domain and credential are deliberately fictional. No collector is bundled or
+hardcoded, and actual delivery cannot be verified without access to a real
+collector.
+
 ## Container
 
 Build and run the service without Compose:
@@ -309,6 +445,83 @@ graph. It checks formatting, linting, strict static typing, the complete test
 suite with terminal and XML coverage reporting plus an 85% minimum, and package
 importability. A separate job builds the container and verifies that its
 application imports while running as user `10001`.
+
+## Project structure
+
+```text
+.
+|-- .github/workflows/quality.yml  # CI quality and container checks
+|-- docs/                          # architecture, privacy, extension, roadmap
+|-- src/genai_usage_observability_gateway/
+|   |-- providers/                 # provider protocols and response clients
+|   |-- models/                    # common strict domain models
+|   |-- normalization.py           # provider-to-common mappings
+|   |-- privacy.py                 # pseudonymization and safe boundaries
+|   |-- aggregation.py             # organization summaries
+|   |-- telemetry.py               # shared OpenTelemetry runtime
+|   |-- organization_metrics.py    # identity-free gauges
+|   |-- usage_events.py            # pseudonymous structured events
+|   |-- workflow.py                # traced collection orchestration
+|   |-- preview.py                 # post-privacy atomic JSON preview
+|   `-- app.py                     # FastAPI lifespan, routes, safe errors
+|-- tests/                         # unit, integration-boundary, privacy tests
+|-- Dockerfile
+|-- pyproject.toml
+`-- uv.lock
+```
+
+## Security and privacy considerations
+
+- Treat provider keys, the pseudonymization key, and OTLP headers as secrets;
+  rotate them according to the operator's policy and never commit them.
+- Use HTTPS endpoints, outbound network controls, and an authenticated
+  collector in any nonlocal deployment.
+- A 16-character HMAC pseudonym is still linkable for the same key and provider.
+  It reduces direct identity exposure; it is not anonymization.
+- Restrict access to pseudonymous events and previews. They can still describe
+  a person's activity pattern and may be sensitive under organizational policy
+  or applicable law.
+- Keep previews disabled outside a controlled development use case, minimize
+  retention, and protect local filesystem permissions.
+- Review a new provider's fields before allowing them beyond the privacy
+  boundary. Unknown upstream fields are rejected rather than exported.
+
+See [Privacy](docs/privacy.md) for the data classification, trust boundaries,
+threats, guarantees, and operator responsibilities.
+
+## Known limitations
+
+- This is pre-alpha reference software, not a production-ready service and not
+  evidence of deployment or adoption by any organization.
+- The Anthropic boundary has only synthetic mocked-HTTP test coverage; no real
+  provider credential or connection has been tested.
+- No real OTLP collector delivery or backend visualization has been tested.
+- Provider analytics availability and semantics are controlled by each
+  provider. The implemented Anthropic API may not expose token or cost data,
+  and the gateway does not invent either.
+- The current service is stateless apart from optional local development
+  preview output. It has no scheduler, durable job queue, authentication layer,
+  authorization policy, rate limiter, database, or multi-tenant control plane.
+- The HMAC key has no built-in rotation or pseudonym migration mechanism.
+- Local container build verification depends on Docker or Podman; the current
+  development host has neither, so CI is the intended Linux build boundary.
+
+Detailed implementation limitations remain tracked in
+[Project Status](docs/PROJECT_STATUS.md).
+
+## Roadmap and provider extension
+
+[Roadmap](docs/roadmap.md) separates validated current capabilities from
+possible future work. It does not promise future provider support or production
+readiness. [Adding a provider](docs/adding_a_provider.md) lists the concrete
+schemas, normalization, privacy, aggregation, workflow, telemetry, service, and
+test changes required for another public analytics API.
+
+Future provider work must use public documentation, preserve provider-specific
+meaning, mock all external requests in tests, and pass the same privacy
+contracts. OpenAI, Azure OpenAI, Google Gemini, GitHub Copilot, and internal LLM
+gateways are possible research directions only; they are not implemented in
+version 0.1.
 
 ## License
 
