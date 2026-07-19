@@ -2,6 +2,7 @@
 
 from enum import StrEnum
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from pydantic import (
@@ -30,6 +31,9 @@ class ProviderName(StrEnum):
     ANTHROPIC = "anthropic"
 
 
+DEFAULT_PREVIEW_OUTPUT_PATH = Path("telemetry-output/usage-preview.json")
+
+
 class AppSettings(BaseSettings):
     """Validated, secret-safe application settings."""
 
@@ -49,12 +53,15 @@ class AppSettings(BaseSettings):
     anthropic_request_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
     otel_exporter_otlp_endpoint: AnyHttpUrl | None = None
     otel_exporter_otlp_headers: SecretStr | None = None
+    preview_enabled: bool | None = None
+    preview_output_path: Path = DEFAULT_PREVIEW_OUTPUT_PATH
 
     @field_validator(
         "pseudonymization_key",
         "anthropic_analytics_api_key",
         "otel_exporter_otlp_endpoint",
         "otel_exporter_otlp_headers",
+        "preview_enabled",
         mode="before",
     )
     @classmethod
@@ -87,6 +94,14 @@ class AppSettings(BaseSettings):
             )
 
         return self
+
+    @property
+    def preview_generation_enabled(self) -> bool:
+        """Use environment-aware preview defaults unless explicitly configured."""
+
+        if self.preview_enabled is not None:
+            return self.preview_enabled
+        return self.app_environment is DeploymentEnvironment.DEVELOPMENT
 
 
 @lru_cache(maxsize=1)

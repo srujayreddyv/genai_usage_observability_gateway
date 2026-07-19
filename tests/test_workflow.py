@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from time import monotonic_ns
 
 import pytest
@@ -39,7 +40,10 @@ from genai_usage_observability_gateway.lifecycle_events import (
     CollectionLifecycleEventName,
     CollectionLifecycleStatus,
 )
-from genai_usage_observability_gateway.preview import render_usage_preview
+from genai_usage_observability_gateway.preview import (
+    DevelopmentPreviewWriter,
+    render_usage_preview,
+)
 from genai_usage_observability_gateway.privacy import HmacSha256Pseudonymizer
 from genai_usage_observability_gateway.providers.anthropic import (
     AnthropicUserActivityRecord,
@@ -166,6 +170,8 @@ def _workflow(
     telemetry: TelemetryRuntime,
     *,
     clock_ns: Callable[[], int] = monotonic_ns,
+    utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    preview_writer: DevelopmentPreviewWriter | None = None,
 ) -> AnthropicCollectionWorkflow:
     return AnthropicCollectionWorkflow(
         client=client,
@@ -173,6 +179,8 @@ def _workflow(
         pseudonymizer=HmacSha256Pseudonymizer(SecretStr(SYNTHETIC_KEY)),
         telemetry=telemetry,
         clock_ns=clock_ns,
+        utc_now=utc_now,
+        preview_writer=preview_writer,
     )
 
 
@@ -237,7 +245,7 @@ def test_successful_workflow_has_one_safe_span_and_complete_outputs(
     assert set(span.attributes) == COLLECTION_TRACE_ATTRIBUTE_KEYS
     assert client.requested_dates == [REPORTING_DATE]
     assert client.provider_call_had_active_span
-    assert preview.metadata.record_count == 2
+    assert len(preview.usage_records) == 2
     assert _metric_count(telemetry_harness.metric_reader) == 42
 
     usage_logs = _logs_for_scope(
@@ -457,3 +465,51 @@ def test_failed_lifecycle_includes_record_count_when_mapping_completed(
     )
     assert failed_attributes[COLLECTION_DURATION_MS_ATTRIBUTE] == 8
     assert failed_attributes[RECORD_COUNT_ATTRIBUTE] == 0
+
+
+def test_workflow_writes_configured_privacy_safe_preview(
+    telemetry_harness: TelemetryHarness,
+    tmp_path: Path,
+) -> None:
+    timestamp = datetime(2026, 2, 3, 12, 34, 56, tzinfo=UTC)
+    output_path = tmp_path / "generated" / "usage-preview.json"
+
+    preview = asyncio.run(
+        _workflow(
+            InMemoryAnthropicClient(_raw_records()),
+            telemetry_harness.runtime,
+            utc_now=lambda: timestamp,
+            preview_writer=DevelopmentPreviewWriter(output_path),
+        ).collect(REPORTING_DATE)
+    )
+
+    assert output_path.read_text(encoding="utf-8") == (
+        f"{render_usage_preview(preview)}\n"
+    )
+    assert preview.collection_timestamp == timestamp
+    assert list(output_path.parent.glob(".usage-preview.json.*.tmp")) == []
+    span = telemetry_harness.span_exporter.get_finished_spans()[0]
+    exported_logs = telemetry_harness.log_exporter.get_finished_logs()
+    assert str(output_path) not in repr(span.attributes)
+    assert str(output_path) not in repr(
+        [
+            (record.log_record.attributes, record.log_record.body)
+            for record in exported_logs
+        ]
+    )
+
+
+def test_workflow_default_collection_timestamp_is_utc(
+    telemetry_harness: TelemetryHarness,
+) -> None:
+    workflow = AnthropicCollectionWorkflow(
+        client=InMemoryAnthropicClient(_raw_records()),
+        client_type=CollectionClientType.IN_MEMORY,
+        pseudonymizer=HmacSha256Pseudonymizer(SecretStr(SYNTHETIC_KEY)),
+        telemetry=telemetry_harness.runtime,
+    )
+
+    preview = asyncio.run(workflow.collect(REPORTING_DATE))
+
+    assert preview.collection_timestamp.tzinfo is UTC
+    assert preview.collection_timestamp.utcoffset() == timedelta(0)

@@ -2,7 +2,7 @@
 
 ## Current state
 
-Milestones 1 through 11 are complete. The project now has a validated Python
+Milestones 1 through 12 are complete. The project now has a validated Python
 foundation, cached application configuration, strict common usage models, an
 asynchronous provider protocol, a synthetic mock analytics client, and a strict
 Anthropic Claude Enterprise User Activity API client. Anthropic records can now
@@ -14,9 +14,11 @@ gauges cover generic normalized concepts and explicitly namespaced Anthropic
 concepts. Each protected user record now emits one structured
 `genai_user_usage` event to local JSON and the OpenTelemetry log pipeline. Each
 collection workflow now emits ordered, privacy-safe lifecycle events with
-trace correlation and monotonic elapsed duration. API endpoints remain
-unimplemented. One `genai.usage.collection` span covers each complete in-memory
-Anthropic collection workflow.
+trace correlation and monotonic elapsed duration. A readable privacy-safe
+preview can be atomically persisted in development and defaults off in every
+other environment. API endpoints remain unimplemented. One
+`genai.usage.collection` span covers each complete Anthropic collection
+workflow.
 
 ## Completed
 
@@ -157,6 +159,22 @@ Anthropic collection workflow.
 - In-memory and local-stream tests covering event order, exact attribute
   allowlists, duration values, severity, status consistency, trace correlation,
   success, early failure, post-mapping failure, and privacy
+- Strict preview document with top-level reporting date, UTC collection
+  timestamp, provider, pseudonymous usage records, and organization snapshot
+- Environment-aware preview enablement that defaults on in development and off
+  in test, staging, and production while allowing an explicit override
+- Configurable preview destination kept out of spans, logs, metrics, and events
+- Missing preview parent-directory creation using the configured local path
+- Secure temporary sibling creation, UTF-8 readable JSON output, explicit
+  flushing and filesystem synchronization, and same-filesystem atomic replace
+- Failure cleanup that removes temporary artifacts while preserving an existing
+  complete destination when replacement fails
+- Workflow persistence after privacy processing and before the correlated
+  `preview_written` lifecycle checkpoint
+- Temporary-directory tests covering required fields, UTC normalization,
+  readable formatting, atomic success and failure, descriptor cleanup,
+  environment defaults, workflow integration, and absence of raw identities,
+  groups, and secrets
 
 ## Validation
 
@@ -166,8 +184,8 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 - Ruff formatting check passed
 - Ruff lint check passed
 - mypy strict type checking passed
-- pytest passed: 181 tests
-- Source coverage: 100% (981 statements)
+- pytest passed: 198 tests
+- Source coverage: 100% (1053 statements)
 - Installed-package import validation passed and reported version `0.1.0`
 
 ## Known limitations
@@ -177,8 +195,8 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
   API options are intentionally outside this milestone.
 - Normalized records intentionally retain raw identity only until the privacy
   boundary; downstream code must consume privacy-safe collection models.
-- Preview rendering is currently in-memory only. No API endpoint or local file
-  workflow exposes it yet.
+- Preview files are local development artifacts only. No API endpoint exposes
+  or retrieves them yet.
 - OpenTelemetry providers, exporters, organization metrics, pseudonymous usage
   events, lifecycle events, and collection spans are implemented.
 - Only the Anthropic provider has a normalization and aggregation adapter; the
@@ -190,5 +208,5 @@ Validated with an isolated `uv`-managed CPython 3.13.13 environment:
 
 ## Next recommended milestone
 
-Milestone 12: write the privacy-safe development preview as readable JSON using
-atomic replacement, temporary test locations, and environment-aware enablement.
+Milestone 13: add the documented FastAPI root, health, collection, and preview
+endpoints without exposing secrets or unsafe configuration.

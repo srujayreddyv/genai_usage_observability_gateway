@@ -43,6 +43,12 @@ activity concepts. Provider adapters retain unique capabilities in strict,
 typed provider-extension models. Optional activity counts distinguish a signal
 that was not exposed (`null`) from an exposed signal with no activity (`0`).
 
+Development preview persistence defaults on only when `APP_ENVIRONMENT` is
+`development`; test, staging, and production default it off. Set
+`PREVIEW_ENABLED` explicitly to override that environment-aware default and
+`PREVIEW_OUTPUT_PATH` to choose the local JSON destination. Preview paths are
+configuration only and are never attached to telemetry.
+
 ## Mock provider
 
 `MockAnalyticsClient` implements the asynchronous provider protocol using only
@@ -101,8 +107,8 @@ included in exported models or errors.
 The resulting privacy-safe collection has three explicit downstream sources:
 identity-free collection metadata for tracing, identity-free organization
 summaries for metrics, and pseudonymous user records for usage events and
-previews. The in-memory JSON preview contains pseudonyms but no emails, raw
-provider identifiers, organizational groups, or secret values.
+previews. The JSON preview contains pseudonyms but no emails, raw provider
+identifiers, organizational groups, or secret values.
 
 Automated privacy contract tests cover structured usage events, lifecycle
 events, metric attributes, workflow spans, and preview output.
@@ -159,9 +165,9 @@ These are two destinations for one logical event and use an identical payload.
 
 `AnthropicCollectionWorkflow` runs provider retrieval and validation,
 normalization, privacy processing, aggregation, metric and event emission, and
-in-memory preview generation inside one `genai.usage.collection` span. Completed
-spans contain only the provider, bounded client type, reporting date, record
-count, and collection status.
+preview generation with optional persistence inside one
+`genai.usage.collection` span. Completed spans contain only the provider,
+bounded client type, reporting date, record count, and collection status.
 
 Successful spans retain the default unset OpenTelemetry status and record a
 `success` collection status. Failures record the exception once through the
@@ -183,10 +189,22 @@ Lifecycle attributes are limited to custom project fields for reporting date,
 provider, bounded client type, collection status, cumulative monotonic duration
 in whole milliseconds, and record count once mapping has completed. Records are
 emitted inside the collection span and inherit its trace context. Development
-also receives one compact JSON line per lifecycle event. The currently named
-`preview_written` checkpoint means the privacy-safe in-memory preview payload
-has been produced; writing that payload atomically to a development file is the
-next milestone.
+also receives one compact JSON line per lifecycle event. `preview_written` is
+emitted after the privacy-safe preview payload is produced and, when configured,
+after its atomic file replacement succeeds.
+
+## Development preview
+
+The readable preview document contains the reporting date, collection timestamp
+normalized to UTC, provider, pseudonymous user usage records, and identity-free
+organization snapshot. It is built only from the post-privacy collection
+boundary.
+
+When enabled, missing parent directories are created and the complete JSON
+document is written to a securely created temporary sibling. The file is
+flushed before `os.replace` atomically replaces the configured destination, so
+a failed write cannot leave a partially updated preview. Generated preview
+files and the default `telemetry-output/` directory are ignored by Git.
 
 ## Development setup
 

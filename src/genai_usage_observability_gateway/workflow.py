@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
+from datetime import UTC, date, datetime
 from time import monotonic_ns
 
 from opentelemetry.semconv.attributes.exception_attributes import (
@@ -26,6 +26,7 @@ from genai_usage_observability_gateway.normalization import (
 )
 from genai_usage_observability_gateway.preview import (
     AnthropicUsagePreview,
+    DevelopmentPreviewWriter,
     build_anthropic_usage_preview_from_collection,
 )
 from genai_usage_observability_gateway.privacy import (
@@ -57,6 +58,10 @@ _SAFE_EXCEPTION_ATTRIBUTES = {
 }
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 class AnthropicCollectionWorkflow:
     """Run the complete Anthropic collection path inside one safe span."""
 
@@ -68,12 +73,16 @@ class AnthropicCollectionWorkflow:
         pseudonymizer: HmacSha256Pseudonymizer,
         telemetry: TelemetryRuntime,
         clock_ns: Callable[[], int] = monotonic_ns,
+        utc_now: Callable[[], datetime] = _utc_now,
+        preview_writer: DevelopmentPreviewWriter | None = None,
     ) -> None:
         self._client = client
         self._client_type = client_type
         self._pseudonymizer = pseudonymizer
         self._telemetry = telemetry
         self._clock_ns = clock_ns
+        self._utc_now = utc_now
+        self._preview_writer = preview_writer
         self._tracer: Tracer = telemetry.tracer_provider.get_tracer(
             COLLECTION_TRACER_NAME,
             __version__,
@@ -103,6 +112,7 @@ class AnthropicCollectionWorkflow:
                     reporting_date,
                     duration_ms=0,
                 )
+                collection_timestamp = self._utc_now()
                 if self._client.provider is not ProviderName.ANTHROPIC:
                     raise ValueError(
                         "Anthropic collection requires an Anthropic client"
@@ -134,7 +144,12 @@ class AnthropicCollectionWorkflow:
                     collection.organization_summary
                 )
                 self._telemetry.usage_events.emit_collection(collection)
-                preview = build_anthropic_usage_preview_from_collection(collection)
+                preview = build_anthropic_usage_preview_from_collection(
+                    collection,
+                    collection_timestamp=collection_timestamp,
+                )
+                if self._preview_writer is not None:
+                    self._preview_writer.write(preview)
                 self._emit_lifecycle(
                     CollectionLifecycleEventName.PREVIEW_WRITTEN,
                     CollectionLifecycleStatus.IN_PROGRESS,

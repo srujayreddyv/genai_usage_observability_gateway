@@ -18,5 +18,6 @@ dist/
 
 # Local telemetry and generated development artifacts
 *.log
-preview*.json
+*preview*.json
+.*preview*.tmp
 telemetry-output/

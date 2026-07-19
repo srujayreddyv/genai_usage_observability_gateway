@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from genai_usage_observability_gateway.config import (
+    DEFAULT_PREVIEW_OUTPUT_PATH,
     AppSettings,
     DeploymentEnvironment,
     ProviderName,
@@ -35,6 +36,8 @@ def isolated_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ANTHROPIC_REQUEST_TIMEOUT_SECONDS",
         "OTEL_EXPORTER_OTLP_ENDPOINT",
         "OTEL_EXPORTER_OTLP_HEADERS",
+        "PREVIEW_ENABLED",
+        "PREVIEW_OUTPUT_PATH",
     ):
         monkeypatch.delenv(name, raising=False)
     clear_settings_cache()
@@ -49,6 +52,43 @@ def test_defaults_select_local_mock_provider() -> None:
     assert settings.analytics_provider is ProviderName.MOCK
     assert settings.pseudonymization_key is None
     assert settings.otel_exporter_otlp_endpoint is None
+    assert settings.preview_enabled is None
+    assert settings.preview_generation_enabled
+    assert settings.preview_output_path == DEFAULT_PREVIEW_OUTPUT_PATH
+
+
+@pytest.mark.parametrize("environment", ["test", "staging", "production"])
+def test_preview_defaults_off_outside_development(
+    monkeypatch: pytest.MonkeyPatch,
+    environment: str,
+) -> None:
+    monkeypatch.setenv("APP_ENVIRONMENT", environment)
+    if environment in {"staging", "production"}:
+        monkeypatch.setenv(
+            "PSEUDONYMIZATION_KEY",
+            "synthetic-preview-pseudonymization-key",
+        )
+
+    settings = load_settings_without_dotenv()
+
+    assert settings.preview_enabled is None
+    assert not settings.preview_generation_enabled
+
+
+def test_preview_configuration_supports_explicit_override(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "nested" / "preview.json"
+    monkeypatch.setenv("APP_ENVIRONMENT", "test")
+    monkeypatch.setenv("PREVIEW_ENABLED", "true")
+    monkeypatch.setenv("PREVIEW_OUTPUT_PATH", str(output_path))
+
+    settings = load_settings_without_dotenv()
+
+    assert settings.preview_enabled is True
+    assert settings.preview_generation_enabled
+    assert settings.preview_output_path == output_path
 
 
 def test_settings_load_and_protect_environment_secrets(
@@ -131,11 +171,14 @@ def test_empty_optional_environment_values_are_unset(
 ) -> None:
     monkeypatch.setenv("PSEUDONYMIZATION_KEY", "  ")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+    monkeypatch.setenv("PREVIEW_ENABLED", "")
 
     settings = load_settings_without_dotenv()
 
     assert settings.pseudonymization_key is None
     assert settings.otel_exporter_otlp_endpoint is None
+    assert settings.preview_enabled is None
+    assert settings.preview_generation_enabled
 
 
 def test_invalid_endpoint_is_rejected_without_input_in_error(
